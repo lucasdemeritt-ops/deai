@@ -118,16 +118,21 @@ async def run_ollama_inference(
     resolved = await ollama_resolve_model(model, available_models)
     log.info(f"Ollama running  model={resolved}")
 
+    request_body = {
+        "model": resolved,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "stream": False,
+        # Disable thinking mode so reasoning tokens don't consume the entire
+        # context window, leaving nothing for the actual answer.
+        "think": False,
+    }
+
     async with httpx.AsyncClient(timeout=180.0) as client:
         resp = await client.post(
             f"{ollama_url}/v1/chat/completions",
-            json={
-                "model": resolved,
-                "messages": messages,
-                "max_tokens": max_tokens,
-                "temperature": temperature,
-                "stream": False,
-            },
+            json=request_body,
         )
         resp.raise_for_status()
         data = resp.json()

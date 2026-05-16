@@ -20,7 +20,7 @@ def send_request(model: str, message: str, url: str, index: int = 0) -> dict:
     payload = {
         "model": model,
         "messages": [{"role": "user", "content": message}],
-        "max_tokens": 256,
+        "max_tokens": 2048,
     }
     t0 = time.time()
     try:
