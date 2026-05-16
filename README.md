@@ -56,32 +56,40 @@ DeAI is a **Decentralized Physical Infrastructure Network (DePIN)** for AI infer
 
 ## Roadmap
 
-### Phase 1 — Feasibility (Months 1–6)
+### Phase 1 — Feasibility (Months 1–6) ✓
 - [x] Task orchestration — request routing from API to nodes over WebSocket
 - [x] Multi-node routing — scored dispatch (model match, GPU, round-robin fairness)
-- [x] Earnings ledger — nodes earn tokens per completed task
-- [ ] ZK-Proof vs. TEE research — choose the verification approach
-- [ ] Mock → real inference — Ollama integration for local model execution
+- [x] Earnings ledger — nodes earn tokens per completed task (in-memory placeholder)
+- [x] Real inference — Ollama integration, local models serving actual responses
+- [x] Security principles — documented non-negotiable rules for privacy and safety
 
-### Phase 2 — Infrastructure (Months 6–12)
+### Phase 2 — Chain & Infrastructure (Months 6–12)
+**Blockchain strategy:** Deploy smart contracts to a free testnet first (Ethereum Sepolia or Polygon Amoy — no real crypto needed, test tokens are free). Prove the economics work. Move to mainnet once there are real users. Evaluate a custom chain or framework (Cosmos SDK / Substrate) if volume justifies it — that decision stays open until Phase 3.
+
+- [ ] **DeAI token contract** — ERC-20 token; mint on node registration, burn on bad behavior
+- [ ] **Payment contract** — escrow: user deposits tokens, released to miner on verified task completion
+- [ ] **Slashing contract** — miners who return bad results lose a portion of their staked tokens
+- [ ] **Testnet deployment** — deploy and test all contracts on Sepolia/Amoy with free test tokens
+- [ ] Replace in-memory ledger with on-chain calls
 - [ ] Node Client installer — one-click setup for Windows/Linux miners
-- [ ] Smart contracts — on-chain payments, slashing for bad actors, token economy
 - [ ] Persistent Agent Runner — long-running agents funded by a token budget; pause and resume as balance allows
-- [ ] Multi-model support — nodes advertise what they can run; routing matches model to capable node
 - [ ] Marketplace API — drop-in OpenAI-compatible endpoint for any existing app
 
-### Phase 3 — Collaborative Compute (Months 12–18)
+### Phase 3 — Mainnet & Collaborative Compute (Months 12–18)
+- [ ] **Mainnet deployment** — move contracts to production chain after testnet validation
+- [ ] **Custom chain evaluation** — if transaction volume warrants it, assess building a sovereign chain optimized for Proof of Useful Inference using Cosmos SDK or Substrate
 - [ ] **Task Sponsorship** — share a wallet address so others can donate tokens to keep your agent running
 - [ ] **Dedicated Mining** — miners point their node at a specific project or agent instead of the general pool
 - [ ] Project pages — shareable public page showing an agent's purpose, wallet, and live contributor list
 - [ ] Mining pools — group nodes together under a shared project identity
+- [ ] ZK-Proof vs. TEE — implement real cryptographic verification to replace mock verifier
 
-### Phase 4 — Provider Auth & Cloud Bridge (Months 18–24)
-- [ ] **Provider-passthrough auth** — users and miners authenticate with their existing AI provider (Anthropic, OpenAI, etc.) using OAuth login or API key; DeAI never touches billing or payment
-- [ ] **Cloud bridge nodes** — miners run a node backed by their own provider subscription; tasks route through it, miner earns tokens, provider bills the miner directly as always
-- [ ] `deai login --provider anthropic` — CLI auth flow; sign into your existing account, no DeAI account or separate billing required
-- [ ] `deai node --provider openai` — node operator flow; contribute your existing subscription capacity to the network and earn tokens back
-- [ ] Testnet launch — open to community; adversarial testing and security audit
+### Phase 4 — Provider Auth, Scale & Openness (Months 18–24)
+- [ ] **Provider-passthrough auth** — users and miners authenticate with their existing AI provider (Anthropic, OpenAI, etc.); DeAI never touches billing or credentials
+- [ ] **Cloud bridge nodes** — miners contribute their existing provider subscription capacity; earn tokens, provider bills them directly
+- [ ] `deai login --provider anthropic` — CLI OAuth flow; no DeAI account required
+- [ ] `deai node --provider openai` — node operator flow using existing subscription
+- [ ] Relay layer — hide node IPs from orchestrator (see SECURITY.md Rule 6)
 - [ ] Sharding — split large tasks across multiple nodes in parallel
 - [ ] Model marketplace — community-published model registry; any model, any hardware tier
 
