@@ -39,13 +39,16 @@ DeAI is a **Decentralized Physical Infrastructure Network (DePIN)** for AI infer
 ┌──────────────────────────────────────────┐
 │           Application Layer              │
 │   REST API · Dashboard · SDK             │
+│   Collaborative Compute · Agent Runner   │
 ├──────────────────────────────────────────┤
 │           Protocol Layer                 │
 │   Task Orchestration · Smart Contracts   │
 │   ZK-Proof / TEE Verification            │
+│   Earnings Ledger · Token Economy        │
 ├──────────────────────────────────────────┤
 │           Compute Layer                  │
 │   Distributed GPUs · CPUs · Node Client  │
+│   Local Models · Cloud Bridge Nodes      │
 └──────────────────────────────────────────┘
 ```
 
@@ -54,18 +57,42 @@ DeAI is a **Decentralized Physical Infrastructure Network (DePIN)** for AI infer
 ## Roadmap
 
 ### Phase 1 — Feasibility (Months 1–6)
-- [ ] Compare ZK-Proofs vs. TEE for verifiable inference
-- [ ] Design the Orchestration Layer (task routing protocol)
-- [ ] Build a centralized-to-decentralized bridge prototype (1 server → 3–5 nodes)
+- [x] Task orchestration — request routing from API to nodes over WebSocket
+- [x] Multi-node routing — scored dispatch (model match, GPU, round-robin fairness)
+- [x] Earnings ledger — nodes earn tokens per completed task
+- [ ] ZK-Proof vs. TEE research — choose the verification approach
+- [ ] Mock → real inference — Ollama integration for local model execution
 
 ### Phase 2 — Infrastructure (Months 6–12)
-- [ ] Node Client — one-click installer (Windows/Linux) to join the network
-- [ ] Incentive Layer — smart contracts for payments, slashing, and rewards
-- [ ] Marketplace API — drop-in OpenAI-compatible endpoint for developers
+- [ ] Node Client installer — one-click setup for Windows/Linux miners
+- [ ] Smart contracts — on-chain payments, slashing for bad actors, token economy
+- [ ] Persistent Agent Runner — long-running agents funded by a token budget; pause and resume as balance allows
+- [ ] Multi-model support — nodes advertise what they can run; routing matches model to capable node
+- [ ] Marketplace API — drop-in OpenAI-compatible endpoint for any existing app
 
-### Phase 3 — Scaling (Months 12–24)
-- [ ] Testnet launch — open to community; adversarial testing
+### Phase 3 — Collaborative Compute (Months 12–18)
+- [ ] **Task Sponsorship** — share a wallet address so others can donate tokens to keep your agent running
+- [ ] **Dedicated Mining** — miners point their node at a specific project or agent instead of the general pool
+- [ ] Project pages — shareable public page showing an agent's purpose, wallet, and live contributor list
+- [ ] Mining pools — group nodes together under a shared project identity
+
+### Phase 4 — Scaling & Openness (Months 18–24)
+- [ ] Testnet launch — open to community; adversarial testing and security audit
 - [ ] Sharding — split large tasks across multiple nodes in parallel
+- [ ] Cloud bridge nodes — optional nodes that wrap frontier APIs (GPT-4, Claude, etc.) for users who need maximum quality; clearly labeled, higher token cost
+- [ ] Model marketplace — community-published model registry; any model, any hardware tier
+
+---
+
+## Collaborative Compute
+
+A core social feature of DeAI. A single person can launch an agent — a research crawler, a creative writing assistant, an automation task — and invite others to keep it alive:
+
+**Token Donation** — Share your task's wallet address. Anyone can send tokens to extend its runtime. No account required, no permission needed.
+
+**Dedicated Mining** — Share a node configuration link. Supporters run a node pointed specifically at your project. Their compute goes directly toward your agent's tasks, and they earn tokens for doing it.
+
+This turns every DeAI agent into a potential community — funded and powered by people who believe in what it's doing.
 
 ---
 
@@ -83,11 +110,26 @@ response = client.deai.create(model="llama-3", ...)
 
 ---
 
+## Model Support
+
+DeAI is model-agnostic by design. Miners run whatever model fits their hardware:
+
+| Tier | Examples | Who runs it |
+|---|---|---|
+| **Local small** | Llama 3 8B, Mistral 7B, Phi-3 | Anyone with 8GB+ RAM |
+| **Local large** | Llama 3 70B, Mixtral | GPU miners with 24GB+ VRAM |
+| **Cloud bridge** | GPT-4, Claude, Gemini | Optional — clearly labeled, higher cost |
+
+No single company controls the model layer. If a company pulls their model or restricts access, the network routes around it.
+
+---
+
 ## Growth Strategy
 
 1. **"Earn While You Sleep"** — Target crypto-mining and home-server communities. One-click installer, start earning immediately.
 2. **Developer-First** — OpenAI-compatible API so any existing app can switch in minutes.
 3. **Compute Subsidy** — Free compute credits for developers for 6 months to seed demand and attract node operators.
+4. **Collaborative Compute** — Every agent is a shareable, community-fundable project. Word of mouth becomes the growth engine.
 
 ---
 
@@ -96,8 +138,9 @@ response = client.deai.create(model="llama-3", ...)
 ```
 deai/
 ├── compute/        # Node client software
-├── protocol/       # Orchestration, smart contracts, verification
+├── protocol/       # Orchestration, smart contracts, verification, ledger
 ├── application/    # API server, SDK, dashboard
+├── shared/         # Data schemas used across all layers
 └── docs/           # Specifications and research
 ```
 
@@ -105,7 +148,7 @@ deai/
 
 ## Contributing
 
-This project is in the early research and design phase. Contributions, ideas, and critiques are welcome — open an issue to start a discussion.
+This project is in active early development. Contributions, ideas, and critiques are welcome — open an issue to start a discussion.
 
 ## License
 
