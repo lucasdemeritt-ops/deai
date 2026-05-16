@@ -39,6 +39,7 @@ from shared.schemas import (
     NodeInfo, NodeStatus,
     WSMessage,
 )
+from ledger import Ledger
 
 logging.basicConfig(
     level=logging.INFO,
@@ -73,6 +74,9 @@ results: Dict[str, TaskResult] = {}
 
 # simple stats
 stats = {"requests": 0, "completed": 0, "failed": 0}
+
+# earnings ledger
+ledger = Ledger()
 
 
 # ── Routing ───────────────────────────────────────────────────────────────────
@@ -185,13 +189,21 @@ async def node_endpoint(ws: WebSocket):
                 result = TaskResult(**msg.payload)
                 result.verified = mock_verify(result)
 
-                nodes[node_id].status = NodeStatus.idle
-                nodes[node_id].tasks_completed += 1
+                node = nodes[node_id]
+                node.status = NodeStatus.idle
+                node.tasks_completed += 1
 
                 results[result.task_id] = result
                 stats["completed"] += 1
 
-                log.info(f"Task done    id={result.task_id}  node={node_id}  verified={result.verified}  tokens={result.tokens_used}")
+                earned = ledger.record_completion(
+                    node_id=node_id,
+                    task_id=result.task_id,
+                    output_tokens=result.tokens_used,
+                    had_gpu=node.info.gpu,
+                )
+
+                log.info(f"Task done    id={result.task_id}  node={node_id}  verified={result.verified}  tokens={result.tokens_used}  earned={earned:.2f}")
 
                 # Wake up the waiting HTTP request
                 if result.task_id in pending_events:
@@ -318,6 +330,7 @@ def network_status():
                 "vram_gb": n.info.vram_gb,
                 "status": n.status.value,
                 "tasks_completed": n.tasks_completed,
+                "balance": ledger.balance(n.info.node_id),
                 "idle_score_for_any": score_node(n, "any") if n.status == NodeStatus.idle else "busy",
                 "last_seen_ago_s": round(now - n.last_seen, 1),
                 "last_task_ago_s": round(now - n.last_task_time, 1) if n.last_task_time else None,
@@ -325,7 +338,23 @@ def network_status():
             for n in nodes.values()
         ],
         "stats": stats,
+        "economy": ledger.network_totals(),
     }
+
+
+@app.get("/earnings")
+def earnings():
+    """Leaderboard — all nodes ranked by total earnings."""
+    return {
+        "leaderboard": ledger.all_balances(),
+        "economy": ledger.network_totals(),
+    }
+
+
+@app.get("/earnings/{node_id}")
+def node_earnings(node_id: str):
+    """Earnings detail for a specific node."""
+    return ledger.summary(node_id)
 
 
 @app.get("/")
