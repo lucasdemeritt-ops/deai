@@ -45,7 +45,7 @@ def check_status(url: str):
         if data["nodes"]:
             print()
             for node in data["nodes"]:
-                score = node.get("idle_score_for_any", "busy")
+                score = node.get("score", "busy")
                 last_task = f"{node['last_task_ago_s']}s ago" if node.get("last_task_ago_s") else "never"
                 gpu_str = f"GPU {node['vram_gb']}GB VRAM" if node.get("gpu") and node.get("vram_gb") else ("GPU" if node.get("gpu") else "CPU")
                 print(f"    [{node['status']:8}]  {node['node_id']}  models={node['models']}  {gpu_str}  tasks={node['tasks_completed']}  score={score}  last_task={last_task}")

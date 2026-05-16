@@ -331,7 +331,7 @@ def network_status():
                 "status": n.status.value,
                 "tasks_completed": n.tasks_completed,
                 "balance": ledger.balance(n.info.node_id),
-                "idle_score_for_any": score_node(n, "any") if n.status == NodeStatus.idle else "busy",
+                "score": score_node(n, n.info.models[0]) if n.status == NodeStatus.idle else "busy",
                 "last_seen_ago_s": round(now - n.last_seen, 1),
                 "last_task_ago_s": round(now - n.last_task_time, 1) if n.last_task_time else None,
             }
