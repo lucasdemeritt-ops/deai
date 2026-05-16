@@ -76,10 +76,13 @@ DeAI is a **Decentralized Physical Infrastructure Network (DePIN)** for AI infer
 - [ ] Project pages — shareable public page showing an agent's purpose, wallet, and live contributor list
 - [ ] Mining pools — group nodes together under a shared project identity
 
-### Phase 4 — Scaling & Openness (Months 18–24)
+### Phase 4 — Provider Auth & Cloud Bridge (Months 18–24)
+- [ ] **Provider-passthrough auth** — users and miners authenticate with their existing AI provider (Anthropic, OpenAI, etc.) using OAuth login or API key; DeAI never touches billing or payment
+- [ ] **Cloud bridge nodes** — miners run a node backed by their own provider subscription; tasks route through it, miner earns tokens, provider bills the miner directly as always
+- [ ] `deai login --provider anthropic` — CLI auth flow; sign into your existing account, no DeAI account or separate billing required
+- [ ] `deai node --provider openai` — node operator flow; contribute your existing subscription capacity to the network and earn tokens back
 - [ ] Testnet launch — open to community; adversarial testing and security audit
 - [ ] Sharding — split large tasks across multiple nodes in parallel
-- [ ] Cloud bridge nodes — optional nodes that wrap frontier APIs (GPT-4, Claude, etc.) for users who need maximum quality; clearly labeled, higher token cost
 - [ ] Model marketplace — community-published model registry; any model, any hardware tier
 
 ---
