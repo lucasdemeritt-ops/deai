@@ -4,9 +4,16 @@ DeAI Orchestrator
 The network brain. Responsibilities:
   - Accept inference requests via HTTP (OpenAI-compatible API)
   - Maintain a registry of connected Worker Nodes
-  - Dispatch tasks to available nodes over WebSocket
+  - Dispatch tasks to the best available node (scored routing)
   - Collect results, run mock verification, return to caller
   - Track basic network stats
+
+Routing score (higher = better candidate):
+  +20  exact model match
+  + 1  "any" model fallback
+  +10  node has a GPU
+  + 8  per GB of VRAM (capped at 8)
+  + 5  idle longest (round-robin tiebreaker, max 5pts)
 
 Run:
     python protocol/orchestrator.py
@@ -51,6 +58,7 @@ class NodeConnection:
         self.info = info
         self.status = NodeStatus.idle
         self.last_seen = time.time()
+        self.last_task_time: float = 0.0  # for round-robin tiebreaking
         self.tasks_completed = 0
 
 
@@ -67,17 +75,70 @@ results: Dict[str, TaskResult] = {}
 stats = {"requests": 0, "completed": 0, "failed": 0}
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# ── Routing ───────────────────────────────────────────────────────────────────
 
-def find_available_node(model: str) -> Optional[NodeConnection]:
-    """Pick an idle node that supports the requested model."""
+def score_node(node: NodeConnection, model: str) -> int:
+    """
+    Score a node as a candidate for a given model request.
+    Returns -1 if the node cannot handle the model at all.
+    """
+    can_run = model in node.info.models or "any" in node.info.models
+    if not can_run:
+        return -1
+
+    score = 0
+
+    # Exact model match strongly preferred over generic "any" nodes
+    if model in node.info.models:
+        score += 20
+    else:
+        score += 1
+
+    # GPU nodes are better for inference
+    if node.info.gpu:
+        score += 10
+
+    # More VRAM = can handle larger models
+    if node.info.vram_gb:
+        score += min(int(node.info.vram_gb), 8)
+
+    # Round-robin tiebreaker: prefer the node that has been idle longest
+    idle_seconds = time.time() - node.last_task_time
+    score += min(int(idle_seconds / 10), 5)
+
+    return score
+
+
+def find_best_node(model: str) -> Optional[tuple[NodeConnection, int, str]]:
+    """
+    Return (best_node, score, reason) for the given model, or None if no node available.
+    Only considers currently idle nodes.
+    """
+    candidates = []
     for node in nodes.values():
         if node.status != NodeStatus.idle:
             continue
-        supports = "any" in node.info.models or model in node.info.models
-        if supports:
-            return node
-    return None
+        s = score_node(node, model)
+        if s >= 0:
+            candidates.append((s, node))
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    best_score, best_node = candidates[0]
+
+    parts = []
+    if model in best_node.info.models:
+        parts.append("exact-model")
+    else:
+        parts.append("any-model")
+    if best_node.info.gpu:
+        parts.append("gpu")
+    if len(candidates) > 1:
+        parts.append(f"{len(candidates)}-candidates")
+
+    return best_node, best_score, "+".join(parts)
 
 
 def mock_verify(result: TaskResult) -> bool:
@@ -171,24 +232,27 @@ async def chat_completions(req: ChatRequest):
 
     log.info(f"Request recv  id={task.task_id}  model={req.model}  nodes_online={len(nodes)}")
 
-    # Find a node (retry for up to 30 seconds if all are busy)
-    node = None
+    # Find the best node (retry for up to 30 seconds if all are busy)
+    match = None
     deadline = time.time() + 30
     while time.time() < deadline:
-        node = find_available_node(req.model)
-        if node:
+        match = find_best_node(req.model)
+        if match:
             break
         await asyncio.sleep(0.5)
 
-    if node is None:
+    if match is None:
         stats["failed"] += 1
         raise HTTPException(
             status_code=503,
             detail=f"No nodes available for model '{req.model}'. Try again shortly or connect a node.",
         )
 
+    node, score, reason = match
+
     # Dispatch to node
     node.status = NodeStatus.busy
+    node.last_task_time = time.time()
     event = asyncio.Event()
     pending_events[task.task_id] = event
 
@@ -203,7 +267,7 @@ async def chat_completions(req: ChatRequest):
         }
     }
     await node.ws.send_text(json.dumps(dispatch_msg))
-    log.info(f"Dispatched   id={task.task_id}  to={node.info.node_id}")
+    log.info(f"Dispatched   id={task.task_id}  to={node.info.node_id}  score={score}  reason={reason}")
 
     # Wait for result (60s timeout)
     try:
@@ -243,6 +307,7 @@ async def chat_completions(req: ChatRequest):
 
 @app.get("/status")
 def network_status():
+    now = time.time()
     return {
         "nodes_online": len(nodes),
         "nodes": [
@@ -250,9 +315,12 @@ def network_status():
                 "node_id": n.info.node_id,
                 "models": n.info.models,
                 "gpu": n.info.gpu,
+                "vram_gb": n.info.vram_gb,
                 "status": n.status.value,
                 "tasks_completed": n.tasks_completed,
-                "last_seen_ago_s": round(time.time() - n.last_seen, 1),
+                "idle_score_for_any": score_node(n, "any") if n.status == NodeStatus.idle else "busy",
+                "last_seen_ago_s": round(now - n.last_seen, 1),
+                "last_task_ago_s": round(now - n.last_task_time, 1) if n.last_task_time else None,
             }
             for n in nodes.values()
         ],
