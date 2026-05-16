@@ -148,9 +148,10 @@ def find_best_node(model: str) -> Optional[tuple[NodeConnection, int, str]]:
 def mock_verify(result: TaskResult) -> bool:
     """
     Placeholder verification step.
-    Phase 1: always passes. Later replaced with ZK-proof or TEE attestation.
+    Phase 1: checks content is non-empty after stripping whitespace.
+    Later replaced with ZK-proof or TEE attestation.
     """
-    return len(result.content) > 0
+    return bool(result.content and result.content.strip())
 
 
 # ── WebSocket: Node registration & task loop ──────────────────────────────────

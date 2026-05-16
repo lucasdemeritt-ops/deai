@@ -34,6 +34,7 @@ import argparse
 import os
 import sys
 
+import re
 import httpx
 import websockets
 
@@ -131,7 +132,18 @@ async def run_ollama_inference(
         resp.raise_for_status()
         data = resp.json()
 
-    content = data["choices"][0]["message"]["content"]
+    msg = data["choices"][0]["message"]
+    content = msg.get("content") or ""
+
+    # qwen3 and other thinking models wrap internal reasoning in <think> tags.
+    # Strip them — we only want the visible answer.
+    content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+
+    # If thinking consumed everything and no visible answer remains, fall back
+    # to the reasoning_content field that some Ollama versions expose.
+    if not content:
+        content = (msg.get("reasoning_content") or "").strip()
+
     tokens_used = data.get("usage", {}).get("completion_tokens", len(content.split()))
     return content, tokens_used
 
