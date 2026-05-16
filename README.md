@@ -34,6 +34,8 @@ python test_request.py --status
 python compute/node.py --ollama --auto
 ```
 
+**Want on-chain rewards?** Mock mode runs without a blockchain — when you're ready to wire up real contracts, see [docs/CHAIN_SETUP.md](docs/CHAIN_SETUP.md).
+
 ---
 
 ## The Problem

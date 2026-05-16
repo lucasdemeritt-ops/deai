@@ -6,7 +6,7 @@ The network brain. Responsibilities:
   - Maintain a registry of connected Worker Nodes
   - Dispatch tasks to the best available node (scored routing)
   - Collect results, run mock verification, return to caller
-  - Track basic network stats
+  - Track basic network stats and earnings
 
 Routing score (higher = better candidate):
   +20  exact model match
@@ -15,11 +15,21 @@ Routing score (higher = better candidate):
   + 8  per GB of VRAM (capped at 8)
   + 5  idle longest (round-robin tiebreaker, max 5pts)
 
-Run:
+Modes:
+  Mock (default) — in-memory ledger, no blockchain required
     python protocol/orchestrator.py
-    (defaults to http://localhost:8000)
+
+  On-chain — real SlashingContract calls for reputation + eligibility
+    python protocol/orchestrator.py --chain \\
+        --rpc-url http://localhost:8545 \\
+        --slashing-contract 0x... \\
+        --payment-contract 0x... \\
+        --orchestrator-key 0x...
+
+  See docs/CHAIN_SETUP.md for full on-chain setup instructions.
 """
 
+import argparse
 import asyncio
 import json
 import logging
@@ -51,7 +61,10 @@ log = logging.getLogger("orchestrator")
 app = FastAPI(title="DeAI Orchestrator", version="0.1.0")
 
 
-# ── In-memory state ───────────────────────────────────────────────────────────
+# ── State ─────────────────────────────────────────────────────────────────────
+
+# Set at startup from CLI args — None means mock/dev mode
+chain_ledger = None
 
 class NodeConnection:
     def __init__(self, ws: WebSocket, info: NodeInfo):
@@ -116,12 +129,17 @@ def score_node(node: NodeConnection, model: str) -> int:
 def find_best_node(model: str) -> Optional[tuple[NodeConnection, int, str]]:
     """
     Return (best_node, score, reason) for the given model, or None if no node available.
-    Only considers currently idle nodes.
+    Only considers idle nodes. In chain mode, skips miners that have been ejected
+    from the SlashingContract (stake burned below minimum).
     """
     candidates = []
     for node in nodes.values():
         if node.status != NodeStatus.idle:
             continue
+        if chain_ledger is not None and node.info.wallet:
+            if not chain_ledger.is_eligible(node.info.wallet):
+                log.warning(f"Node ineligible (ejected on-chain)  id={node.info.node_id}  wallet={node.info.wallet[:10]}...")
+                continue
         s = score_node(node, model)
         if s >= 0:
             candidates.append((s, node))
@@ -206,13 +224,27 @@ async def node_endpoint(ws: WebSocket):
 
                 log.info(f"Task done    id={result.task_id}  node={node_id}  verified={result.verified}  tokens={result.tokens_used}  earned={earned:.2f}")
 
+                # On-chain: increment reputation (fire-and-forget, doesn't block result)
+                if chain_ledger is not None and node.info.wallet and result.verified:
+                    asyncio.create_task(
+                        asyncio.to_thread(chain_ledger.record_completion_onchain, node.info.wallet)
+                    )
+
+                # On-chain: slash if result failed verification
+                if chain_ledger is not None and node.info.wallet and not result.verified:
+                    log.warning(f"Slashing node for bad result  node={node_id}  wallet={node.info.wallet[:10]}...")
+                    asyncio.create_task(
+                        asyncio.to_thread(chain_ledger.slash_onchain, node.info.wallet)
+                    )
+
                 # Wake up the waiting HTTP request
                 if result.task_id in pending_events:
                     pending_events[result.task_id].set()
 
             elif msg.type == "task_failed":
                 task_id = msg.payload.get("task_id")
-                nodes[node_id].status = NodeStatus.idle
+                node = nodes[node_id]
+                node.status = NodeStatus.idle
                 stats["failed"] += 1
                 log.warning(f"Task failed  id={task_id}  node={node_id}")
                 if task_id and task_id in pending_events:
@@ -366,4 +398,46 @@ def root():
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="warning")
+    parser = argparse.ArgumentParser(description="DeAI Orchestrator")
+    parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--port", type=int, default=8000)
+
+    # On-chain mode (opt-in — mock mode is the default)
+    parser.add_argument("--chain", action="store_true",
+                        help="Enable on-chain mode (SlashingContract reputation tracking)")
+    parser.add_argument("--rpc-url",
+                        default=os.getenv("DEAI_RPC_URL", "http://localhost:8545"),
+                        help="RPC endpoint for the chain (default: localhost Hardhat node)")
+    parser.add_argument("--slashing-contract",
+                        default=os.getenv("DEAI_SLASHING_CONTRACT"),
+                        help="Deployed SlashingContract address")
+    parser.add_argument("--payment-contract",
+                        default=os.getenv("DEAI_PAYMENT_CONTRACT"),
+                        help="Deployed PaymentContract address")
+    parser.add_argument("--orchestrator-key",
+                        default=os.getenv("DEAI_ORCHESTRATOR_KEY"),
+                        help="Orchestrator wallet private key (needs ORCHESTRATOR_ROLE on contracts)")
+
+    args = parser.parse_args()
+
+    if args.chain:
+        missing = [n for n, v in [
+            ("--slashing-contract", args.slashing_contract),
+            ("--payment-contract",  args.payment_contract),
+            ("--orchestrator-key",  args.orchestrator_key),
+        ] if not v]
+        if missing:
+            parser.error(f"--chain requires: {', '.join(missing)}")
+
+        from chain_ledger import ChainLedger
+        chain_ledger = ChainLedger(
+            rpc_url=args.rpc_url,
+            orchestrator_key=args.orchestrator_key,
+            slashing_addr=args.slashing_contract,
+            payment_addr=args.payment_contract,
+        )
+        log.info("Running in ON-CHAIN mode — SlashingContract wired")
+    else:
+        log.info("Running in MOCK mode — in-memory ledger only (no blockchain required)")
+
+    uvicorn.run(app, host=args.host, port=args.port, log_level="warning")

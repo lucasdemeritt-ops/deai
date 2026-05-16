@@ -51,6 +51,7 @@ class NodeInfo(BaseModel):
     gpu: bool = False
     vram_gb: Optional[float] = None
     ram_gb: Optional[float] = None
+    wallet: Optional[str] = None  # EVM wallet address; required for on-chain rewards
 
 
 class NodeStatus(str, Enum):
