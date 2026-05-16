@@ -153,6 +153,8 @@ deai/
 
 This project is in active early development. Contributions, ideas, and critiques are welcome — open an issue to start a discussion.
 
+Before contributing code, read [SECURITY.md](docs/SECURITY.md). The rules there are non-negotiable: no IP logging, no credential transmission, no prompt content on-chain. PRs that violate them won't be merged.
+
 ## License
 
 [MIT](LICENSE)
