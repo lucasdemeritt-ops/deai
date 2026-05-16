@@ -1,6 +1,38 @@
 # DeAI — Decentralized AI Network
 
+[![CI](https://github.com/theblankist/deai/actions/workflows/ci.yml/badge.svg)](https://github.com/theblankist/deai/actions/workflows/ci.yml)
+
 > A permissionless, censorship-resistant compute marketplace where anyone with a GPU or CPU earns by powering AI inference.
+
+---
+
+## Quick Start
+
+**No Ollama? No problem — mock mode works out of the box.**
+
+```bash
+# 1. Clone and install
+git clone https://github.com/theblankist/deai.git
+cd deai
+pip install -r requirements.txt
+
+# Terminal 1 — start the orchestrator
+python protocol/orchestrator.py
+
+# Terminal 2 — connect a node (mock mode, no model download needed)
+python compute/node.py --models llama3
+
+# Terminal 3 — send a request
+python test_request.py --message "What is decentralized AI?"
+
+# Check node status and earnings
+python test_request.py --status
+```
+
+**Want real inference?** Install [Ollama](https://ollama.com), pull a model (`ollama pull llama3`), then:
+```bash
+python compute/node.py --ollama --auto
+```
 
 ---
 
@@ -66,9 +98,9 @@ DeAI is a **Decentralized Physical Infrastructure Network (DePIN)** for AI infer
 ### Phase 2 — Chain & Infrastructure (Months 6–12)
 **Blockchain strategy:** Deploy smart contracts to a free testnet first (Ethereum Sepolia or Polygon Amoy — no real crypto needed, test tokens are free). Prove the economics work. Move to mainnet once there are real users. Evaluate a custom chain or framework (Cosmos SDK / Substrate) if volume justifies it — that decision stays open until Phase 3.
 
-- [ ] **DeAI token contract** — ERC-20 token; mint on node registration, burn on bad behavior
-- [ ] **Payment contract** — escrow: user deposits tokens, released to miner on verified task completion
-- [ ] **Slashing contract** — miners who return bad results lose a portion of their staked tokens
+- [x] **DeAI token contract** — ERC-20 token with mint/burn roles; written, tested (24/24 passing)
+- [x] **Payment contract** — escrow: user deposits tokens, released to miner on verified task completion; written, tested
+- [x] **Slashing contract** — miners who return bad results lose a portion of their staked tokens; written, tested
 - [ ] **Testnet deployment** — deploy and test all contracts on Sepolia/Amoy with free test tokens
 - [ ] Replace in-memory ledger with on-chain calls
 - [ ] Node Client installer — one-click setup for Windows/Linux miners
