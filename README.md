@@ -117,14 +117,14 @@ Your orchestrator and the core team's run independently — miners choose which 
 
 ## Roadmap
 
-### Phase 1 — Feasibility (Months 1–6) ✓
+### Phase 1 — Feasibility ✓
 - [x] Task orchestration — request routing from API to nodes over WebSocket
 - [x] Multi-node routing — scored dispatch (model match, GPU, round-robin fairness)
 - [x] Earnings ledger — nodes earn tokens per completed task (in-memory placeholder)
 - [x] Real inference — Ollama integration, local models serving actual responses
 - [x] Security principles — documented non-negotiable rules for privacy and safety
 
-### Phase 2 — Chain & Infrastructure (Months 6–12)
+### Phase 2 — Chain & Infrastructure ✓
 **Blockchain strategy:** Deploy smart contracts to a free testnet first (Ethereum Sepolia or Polygon Amoy — no real crypto needed, test tokens are free). Prove the economics work. Move to mainnet once there are real users. Evaluate a custom chain or framework (Cosmos SDK / Substrate) if volume justifies it — that decision stays open until Phase 3.
 
 - [x] **DeAI token contract** — ERC-20 token with mint/burn roles; written, tested (24/24 passing)
@@ -139,7 +139,7 @@ Your orchestrator and the core team's run independently — miners choose which 
 - [x] **Marketplace API** — OpenAI-compatible endpoint with optional API key auth (`--api-key`)
 - [x] **Persistent Agent Runner** — `application/agent_runner.py`; runs on a token budget, pauses when exhausted, resumes on top-up
 
-### Phase 3 — Mainnet & Collaborative Compute (Months 12–18)
+### Phase 3 — Mainnet & Collaborative Compute
 - [ ] **Mainnet deployment** — move contracts to production chain after testnet validation
 - [ ] **Custom chain evaluation** — if transaction volume warrants it, assess building a sovereign chain optimized for Proof of Useful Inference using Cosmos SDK or Substrate
 - [ ] **Task Sponsorship** — share a wallet address so others can donate tokens to keep your agent running
@@ -148,7 +148,7 @@ Your orchestrator and the core team's run independently — miners choose which 
 - [ ] Mining pools — group nodes together under a shared project identity
 - [ ] ZK-Proof vs. TEE — implement real cryptographic verification to replace mock verifier
 
-### Phase 4 — Provider Auth, Scale & Openness (Months 18–24)
+### Phase 4 — Provider Auth, Scale & Openness
 - [ ] **Provider-passthrough auth** — users and miners authenticate with their existing AI provider (Anthropic, OpenAI, etc.); DeAI never touches billing or credentials
 - [ ] **Cloud bridge nodes** — miners contribute their existing provider subscription capacity; earn tokens, provider bills them directly
 - [ ] `deai login --provider anthropic` — CLI OAuth flow; no DeAI account required
