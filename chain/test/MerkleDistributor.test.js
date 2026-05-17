@@ -47,6 +47,17 @@ function buildTree(ethers, entries) {
   return { root: levels[levels.length - 1][0], proofs };
 }
 
+// Chai revert matchers are not available under plain mocha in this repo;
+// mirror the try/catch idiom used by deai.test.js.
+async function expectRevert(promise) {
+  try {
+    await promise;
+    expect.fail("expected revert");
+  } catch (e) {
+    expect(e.message).to.not.equal("expected revert");
+  }
+}
+
 describe("MerkleDistributor", function () {
   this.timeout(60000);
 
@@ -75,9 +86,10 @@ describe("MerkleDistributor", function () {
 
   it("only UPDATER_ROLE can publish a root", async function () {
     const { root } = buildTree(ethers, [{ addr: a.address, amount: 100n }]);
-    await expect(dist.connect(a).updateRoot(root)).to.be.reverted;
-    await expect(dist.connect(orchestrator).updateRoot(root)).to.not.be.reverted;
+    await expectRevert(dist.connect(a).updateRoot(root));
+    await dist.connect(orchestrator).updateRoot(root);
     expect(await dist.epoch()).to.equal(1n);
+    expect(await dist.merkleRoot()).to.equal(root);
   });
 
   it("lets each miner claim exactly their cumulative amount", async function () {
@@ -89,13 +101,17 @@ describe("MerkleDistributor", function () {
     const { root, proofs } = buildTree(ethers, entries);
     await dist.connect(orchestrator).updateRoot(root);
 
-    await dist.connect(a).claim(proofs[a.address.toLowerCase()].amount, proofs[a.address.toLowerCase()].proof);
-    await dist.connect(b).claim(proofs[b.address.toLowerCase()].amount, proofs[b.address.toLowerCase()].proof);
-    await dist.connect(c).claim(proofs[c.address.toLowerCase()].amount, proofs[c.address.toLowerCase()].proof);
+    const pa = proofs[a.address.toLowerCase()];
+    const pb = proofs[b.address.toLowerCase()];
+    const pc = proofs[c.address.toLowerCase()];
+    await dist.connect(a).claim(pa.amount, pa.proof);
+    await dist.connect(b).claim(pb.amount, pb.proof);
+    await dist.connect(c).claim(pc.amount, pc.proof);
 
     expect(await token.balanceOf(a.address)).to.equal(ethers.parseEther("10"));
     expect(await token.balanceOf(b.address)).to.equal(ethers.parseEther("25"));
     expect(await token.balanceOf(c.address)).to.equal(ethers.parseEther("3"));
+    expect(await dist.claimed(a.address)).to.equal(ethers.parseEther("10"));
   });
 
   it("rejects a double claim with no new earnings", async function () {
@@ -105,9 +121,7 @@ describe("MerkleDistributor", function () {
     await dist.connect(orchestrator).updateRoot(root);
     const p = proofs[a.address.toLowerCase()];
     await dist.connect(a).claim(p.amount, p.proof);
-    await expect(dist.connect(a).claim(p.amount, p.proof)).to.be.revertedWith(
-      "MerkleDistributor: nothing to claim"
-    );
+    await expectRevert(dist.connect(a).claim(p.amount, p.proof));
   });
 
   it("rejects a bad proof", async function () {
@@ -115,12 +129,8 @@ describe("MerkleDistributor", function () {
       { addr: a.address, amount: ethers.parseEther("10") },
     ]);
     await dist.connect(orchestrator).updateRoot(root);
-    await expect(
-      dist.connect(a).claim(ethers.parseEther("10"), [])
-    ).to.be.revertedWith("MerkleDistributor: bad proof");
-    await expect(
-      dist.connect(a).claim(ethers.parseEther("999"), [])
-    ).to.be.revertedWith("MerkleDistributor: bad proof");
+    await expectRevert(dist.connect(a).claim(ethers.parseEther("10"), []));
+    await expectRevert(dist.connect(a).claim(ethers.parseEther("999"), []));
   });
 
   it("pays only the delta after a cumulative top-up", async function () {

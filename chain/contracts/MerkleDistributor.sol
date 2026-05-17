@@ -65,7 +65,7 @@ contract MerkleDistributor is AccessControl {
             bytes.concat(keccak256(abi.encode(msg.sender, cumulativeAmount)))
         );
         require(
-            MerkleProof.verify(proof, merkleRoot, leaf),
+            MerkleProof.verifyCalldata(proof, merkleRoot, leaf),
             "MerkleDistributor: bad proof"
         );
 
