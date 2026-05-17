@@ -33,7 +33,7 @@ jobs:
         run: npm test
 
   python-check:
-    name: Python Syntax Check
+    name: Python Checks & Tests
     runs-on: ubuntu-latest
 
     steps:
@@ -44,12 +44,16 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements-dev.txt
 
       - name: Syntax check
         run: |
           python -m py_compile protocol/orchestrator.py
+          python -m py_compile protocol/verification.py
           python -m py_compile protocol/ledger.py
           python -m py_compile compute/node.py
           python -m py_compile shared/schemas.py
           python -m py_compile test_request.py
+
+      - name: Unit tests
+        run: python -m pytest tests/ -q
