@@ -39,7 +39,8 @@ import os
 from typing import Dict, Optional
 
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, Security
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import JSONResponse
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -65,6 +66,17 @@ app = FastAPI(title="DeAI Orchestrator", version="0.1.0")
 
 # Set at startup from CLI args — None means mock/dev mode
 chain_ledger = None
+
+# Optional API key — None means open access (fine for local dev)
+_api_key: Optional[str] = None
+_bearer = HTTPBearer(auto_error=False)
+
+
+def _check_api_key(creds: Optional[HTTPAuthorizationCredentials] = Security(_bearer)):
+    if _api_key is None:
+        return  # open access
+    if creds is None or creds.credentials != _api_key:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key.")
 
 class NodeConnection:
     def __init__(self, ws: WebSocket, info: NodeInfo):
@@ -224,10 +236,15 @@ async def node_endpoint(ws: WebSocket):
 
                 log.info(f"Task done    id={result.task_id}  node={node_id}  verified={result.verified}  tokens={result.tokens_used}  earned={earned:.2f}")
 
-                # On-chain: increment reputation (fire-and-forget, doesn't block result)
+                # On-chain: mint reward tokens + record reputation (fire-and-forget)
                 if chain_ledger is not None and node.info.wallet and result.verified:
                     asyncio.create_task(
-                        asyncio.to_thread(chain_ledger.record_completion_onchain, node.info.wallet)
+                        asyncio.to_thread(
+                            chain_ledger.record_completion_onchain,
+                            node.info.wallet,
+                            result.tokens_used,
+                            node.info.gpu,
+                        )
                     )
 
                 # On-chain: slash if result failed verification
@@ -265,7 +282,7 @@ async def node_endpoint(ws: WebSocket):
 # ── HTTP: OpenAI-compatible inference endpoint ────────────────────────────────
 
 @app.post("/v1/chat/completions", response_model=ChatResponse)
-async def chat_completions(req: ChatRequest):
+async def chat_completions(req: ChatRequest, _auth=Depends(_check_api_key)):
     stats["requests"] += 1
 
     task = Task(
@@ -401,13 +418,19 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="DeAI Orchestrator")
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--api-key", default=os.getenv("DEAI_API_KEY"),
+                        help="Require this key on /v1/chat/completions requests (Bearer token). "
+                             "Omit for open access (local dev default).")
 
     # On-chain mode (opt-in — mock mode is the default)
     parser.add_argument("--chain", action="store_true",
-                        help="Enable on-chain mode (SlashingContract reputation tracking)")
+                        help="Enable on-chain mode (real DEAI rewards + SlashingContract)")
     parser.add_argument("--rpc-url",
                         default=os.getenv("DEAI_RPC_URL", "http://localhost:8545"),
                         help="RPC endpoint for the chain (default: localhost Hardhat node)")
+    parser.add_argument("--token-contract",
+                        default=os.getenv("DEAI_TOKEN_CONTRACT"),
+                        help="Deployed DeAIToken address")
     parser.add_argument("--slashing-contract",
                         default=os.getenv("DEAI_SLASHING_CONTRACT"),
                         help="Deployed SlashingContract address")
@@ -416,12 +439,19 @@ if __name__ == "__main__":
                         help="Deployed PaymentContract address")
     parser.add_argument("--orchestrator-key",
                         default=os.getenv("DEAI_ORCHESTRATOR_KEY"),
-                        help="Orchestrator wallet private key (needs ORCHESTRATOR_ROLE on contracts)")
+                        help="Orchestrator wallet private key (needs MINTER_ROLE + ORCHESTRATOR_ROLE)")
 
     args = parser.parse_args()
 
+    if args.api_key:
+        _api_key = args.api_key
+        log.info("API key authentication enabled on /v1/chat/completions")
+    else:
+        log.info("Running in open-access mode (no API key required)")
+
     if args.chain:
         missing = [n for n, v in [
+            ("--token-contract",    args.token_contract),
             ("--slashing-contract", args.slashing_contract),
             ("--payment-contract",  args.payment_contract),
             ("--orchestrator-key",  args.orchestrator_key),
@@ -433,6 +463,7 @@ if __name__ == "__main__":
         chain_ledger = ChainLedger(
             rpc_url=args.rpc_url,
             orchestrator_key=args.orchestrator_key,
+            token_addr=args.token_contract,
             slashing_addr=args.slashing_contract,
             payment_addr=args.payment_contract,
         )

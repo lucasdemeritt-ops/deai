@@ -34,6 +34,20 @@ python test_request.py --status
 python compute/node.py --ollama --auto
 ```
 
+**One-click node setup:**
+```bash
+# Windows
+.\install_node.ps1
+
+# Linux / macOS
+./install_node.sh
+```
+
+**Run a persistent agent on a token budget:**
+```bash
+python application/agent_runner.py --prompt "Summarize today's AI news" --budget 50 --loop
+```
+
 **Want on-chain rewards?** Mock mode runs without a blockchain — when you're ready to wire up real contracts, see [docs/CHAIN_SETUP.md](docs/CHAIN_SETUP.md).
 
 ---
@@ -104,13 +118,13 @@ DeAI is a **Decentralized Physical Infrastructure Network (DePIN)** for AI infer
 - [x] **Payment contract** — escrow: user deposits tokens, released to miner on verified task completion; written, tested
 - [x] **Slashing contract** — miners who return bad results lose a portion of their staked tokens; written, tested
 - [x] **Testnet deployment** — all three contracts live on Ethereum Sepolia
-  - DeAIToken: [`0x3d05b005b925a5d88af8eDf499659334aA1cB628`](https://sepolia.etherscan.io/address/0x3d05b005b925a5d88af8eDf499659334aA1cB628)
-  - PaymentContract: [`0x54319c2640C725bAD3012937Dfd5b71068d1eb3B`](https://sepolia.etherscan.io/address/0x54319c2640C725bAD3012937Dfd5b71068d1eb3B)
-  - SlashingContract: [`0x91533badB0e79A40097D49BD36E9B84B2d0c53b7`](https://sepolia.etherscan.io/address/0x91533badB0e79A40097D49BD36E9B84B2d0c53b7)
-- [ ] Replace in-memory ledger with on-chain calls
-- [ ] Node Client installer — one-click setup for Windows/Linux miners
-- [ ] Persistent Agent Runner — long-running agents funded by a token budget; pause and resume as balance allows
-- [ ] Marketplace API — drop-in OpenAI-compatible endpoint for any existing app
+  - DeAIToken: [`0xE513DAb60018fc63bDB240605CE0816dE7751B27`](https://sepolia.etherscan.io/address/0xE513DAb60018fc63bDB240605CE0816dE7751B27)
+  - PaymentContract: [`0x49F2ed162B5DEba2b768BFD79313FADdF3c075C8`](https://sepolia.etherscan.io/address/0x49F2ed162B5DEba2b768BFD79313FADdF3c075C8)
+  - SlashingContract: [`0xDFea0F4436E3B30D2861D7b7Acf6c252Da28633c`](https://sepolia.etherscan.io/address/0xDFea0F4436E3B30D2861D7b7Acf6c252Da28633c)
+- [x] **On-chain rewards** — orchestrator mints real DEAI to miner wallets on task completion
+- [x] **Node Client installer** — one-click setup scripts for Windows (`install_node.ps1`) and Linux/macOS (`install_node.sh`)
+- [x] **Marketplace API** — OpenAI-compatible endpoint with optional API key auth (`--api-key`)
+- [x] **Persistent Agent Runner** — `application/agent_runner.py`; runs on a token budget, pauses when exhausted, resumes on top-up
 
 ### Phase 3 — Mainnet & Collaborative Compute (Months 12–18)
 - [ ] **Mainnet deployment** — move contracts to production chain after testnet validation

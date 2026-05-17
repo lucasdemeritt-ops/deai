@@ -9,6 +9,7 @@
  * After deployment the script wires up roles so that:
  *   PaymentContract  → MINTER_ROLE  on DeAIToken
  *   SlashingContract → BURNER_ROLE  on DeAIToken
+ *   Orchestrator     → MINTER_ROLE  on DeAIToken (for direct task rewards)
  */
 import hre from "hardhat";
 
@@ -54,6 +55,10 @@ async function main() {
 
   await (await token.grantRole(BURNER_ROLE, slashingAddr)).wait();
   console.log(`Granted BURNER_ROLE → SlashingContract`);
+
+  // Orchestrator mints rewards directly to miners when tasks complete
+  await (await token.grantRole(MINTER_ROLE, orchestratorAddr)).wait();
+  console.log(`Granted MINTER_ROLE → Orchestrator (${orchestratorAddr})`);
 
   // ── 5. Summary ──────────────────────────────────────────────────
   console.log(`
