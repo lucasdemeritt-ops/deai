@@ -157,6 +157,16 @@ Your orchestrator and the core team's run independently — miners choose which 
 - [ ] Sharding — split large tasks across multiple nodes in parallel
 - [ ] Model marketplace — community-published model registry; any model, any hardware tier
 
+### Phase 5 — Distributed Training
+
+Inference is stateless — any node can handle any request independently. Training is a different problem: coordinated state across many nodes, gradient synchronization, fault tolerance if a node drops mid-run, and jobs that run for hours or days instead of seconds. Phase 5 extends the network to support this workload, turning DeAI into a full compute layer for AI — not just inference consumers, but researchers and open-source model projects who want to train without renting from AWS.
+
+- [ ] **Training job orchestration** — coordinate multi-node training runs; handle node dropout and job resumption gracefully
+- [ ] **Gradient aggregation** — secure aggregation of model updates across contributing nodes
+- [ ] **Training verification** — cryptographic or statistical methods to confirm nodes contributed honest compute to a training run
+- [ ] **Long-job economics** — token model for hours/days-long jobs; partial payouts, checkpointing, and slashing for early dropout
+- [ ] **Open model registry** — community-trained models published to the marketplace; anyone can contribute compute, anyone can use the result
+
 ---
 
 ## Collaborative Compute
