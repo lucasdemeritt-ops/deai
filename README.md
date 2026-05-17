@@ -128,6 +128,18 @@ Closing the verification gap is the single highest priority before any of the to
 
 ---
 
+## Direction & Design
+
+The current-state notes above are deliberately honest about what is *not* yet built. The design direction that closes those gaps is decided and documented:
+
+- **[docs/VISION.md](docs/VISION.md)** — the actual goal: many nodes *contribute to* an inference, not one node per task. The honest staircase to get there (single-node → job-parallel swarms → model-sharded inference → distributed training) and why each step is independently testable.
+- **[docs/VERIFICATION.md](docs/VERIFICATION.md)** — the keystone decision: verification is *optimistic-first* (redundant execution + economic slashing), *tiered* toward TEE attestation, with zkML as a research track. Real verification comes **before** mainnet, not after.
+- **[docs/ECONOMICS.md](docs/ECONOMICS.md)** — the token model: DEAI is redeemable for real inference at a rate that is *transparently and verifiably determined, never set at anyone's discretion* (the redemption invariant + the immutable self-check). Stable on-ramps absorb volatility; the token is non-transferable and valueless until an explicit graduation checklist is met.
+
+One-line summary of the sequencing: **trustworthy work-measurement is the keystone — honest pay and an honest redemption rate both depend on it — so verification and economic hardening come first, and mainnet is a graduation exam gated behind them, not a milestone to rush.**
+
+---
+
 ## Roadmap
 
 ### Phase 1 — Feasibility ✓
@@ -138,7 +150,7 @@ Closing the verification gap is the single highest priority before any of the to
 - [x] Security principles — documented non-negotiable rules for privacy and safety
 
 ### Phase 2 — Chain & Infrastructure ✓
-**Blockchain strategy:** Deploy smart contracts to a free testnet first (Ethereum Sepolia or Polygon Amoy — no real crypto needed, test tokens are free). Prove the economics work. Move to mainnet once there are real users. Evaluate a custom chain or framework (Cosmos SDK / Substrate) if volume justifies it — that decision stays open until Phase 3.
+**Blockchain strategy:** Smart contracts are deployed to a free testnet (Ethereum Sepolia) with a valueless test token. The token stays non-transferable until verification and economics are proven. Mainnet, and the existing-chain-vs-sovereign-chain decision, are deliberately deferred and gated — see [docs/ECONOMICS.md](docs/ECONOMICS.md), [docs/VERIFICATION.md](docs/VERIFICATION.md), and the re-ordered roadmap below.
 
 - [x] **DeAI token contract** — ERC-20 token with mint/burn roles; written, tested (24/24 passing)
 - [x] **Payment contract** — escrow: user deposits tokens, released to miner on verified task completion; written, tested — **not yet integrated into the live orchestrator path** (see *Verification & economics (current state)* above)
@@ -152,34 +164,51 @@ Closing the verification gap is the single highest priority before any of the to
 - [x] **Marketplace API** — OpenAI-compatible endpoint with optional API key auth (`--api-key`)
 - [x] **Persistent Agent Runner** — `application/agent_runner.py`; runs on a token budget, pauses when exhausted, resumes on top-up
 
-### Phase 3 — Mainnet & Collaborative Compute
-- [ ] **Mainnet deployment** — move contracts to production chain after testnet validation
-- [ ] **Custom chain evaluation** — if transaction volume warrants it, assess building a sovereign chain optimized for Proof of Useful Inference using Cosmos SDK or Substrate
-- [ ] **Task Sponsorship** — share a wallet address so others can donate tokens to keep your agent running
-- [ ] **Dedicated Mining** — miners point their node at a specific project or agent instead of the general pool
-- [ ] Project pages — shareable public page showing an agent's purpose, wallet, and live contributor list
-- [ ] Mining pools — group nodes together under a shared project identity
-- [ ] **Agent swarms** — orchestrate multi-agent pipelines across multiple nodes in parallel; large tasks decomposed into subtasks, each handled by a dedicated node, results aggregated by a coordinator agent
-- [ ] ZK-Proof vs. TEE — implement real cryptographic verification to replace mock verifier
+> **Re-ordered:** verification and economic hardening now precede mainnet, and the original "Phase 5 — Distributed Training" moonshot is honestly sequenced last as the actual destination. See *Direction & Design* above.
 
-### Phase 4 — Provider Auth, Scale & Openness
-- [ ] **Provider-passthrough auth** — users and miners authenticate with their existing AI provider (Anthropic, OpenAI, etc.); DeAI never touches billing or credentials
-- [ ] **Cloud bridge nodes** — miners contribute their existing provider subscription capacity; earn tokens, provider bills them directly
-- [ ] `deai login --provider anthropic` — CLI OAuth flow; no DeAI account required
-- [ ] `deai node --provider openai` — node operator flow using existing subscription
-- [ ] Relay layer — hide node IPs from orchestrator (see SECURITY.md Rule 6)
-- [ ] Sharding — split large tasks across multiple nodes in parallel
-- [ ] Model marketplace — community-published model registry; any model, any hardware tier
+### Phase 3 — Verification & Economic Foundations (the keystone)
 
-### Phase 5 — Distributed Training
+Nothing below ships with real value until this phase is proven. All of it runs on the non-transferable testnet. See [docs/VERIFICATION.md](docs/VERIFICATION.md) and [docs/ECONOMICS.md](docs/ECONOMICS.md).
 
-Inference is stateless — any node can handle any request independently. Training is a different problem: coordinated state across many nodes, gradient synchronization, fault tolerance if a node drops mid-run, and jobs that run for hours or days instead of seconds. Phase 5 extends the network to support this workload, turning DeAI into a full compute layer for AI — not just inference consumers, but researchers and open-source model projects who want to train without renting from AWS.
+- [ ] **Real verification** — replace `mock_verify` with a `Verifier` interface + optimistic redundant execution (sampled re-dispatch, semantic tolerance, escalation, economic slashing). Makes slashing meaningful.
+- [ ] **Trustworthy work-measurement** — the shared substrate that both honest pay *and* the honest redemption rate depend on.
+- [ ] **Tiered verification** — Standard (optimistic) now; Attested (TEE, also prompt privacy) as a premium lane; zkML as a research track.
+- [ ] **Vesting-bond sybil resistance** — no upfront stake; unvested earnings act as a slashable bond. Preserves no-barrier-to-entry.
+- [ ] **Redemption-anchored economics** — DEAI redeemable for inference at a transparently determined rate; stablecoin/fiat on-ramps; burn sinks.
+- [ ] **The immutable self-check** — open on-chain rule, tamper-evident inputs, publicly recomputable, rule changes only via a pre-announced timelocked path. (Expected to take more than one iteration — see ECONOMICS.md.)
+- [ ] **Decentralize the orchestrator** — remove the single-trusted-node and `MINTER_ROLE` centralization.
 
-- [ ] **Training job orchestration** — coordinate multi-node training runs; handle node dropout and job resumption gracefully
-- [ ] **Gradient aggregation** — secure aggregation of model updates across contributing nodes
-- [ ] **Training verification** — cryptographic or statistical methods to confirm nodes contributed honest compute to a training run
-- [ ] **Long-job economics** — token model for hours/days-long jobs; partial payouts, checkpointing, and slashing for early dropout
-- [ ] **Open model registry** — community-trained models published to the marketplace; anyone can contribute compute, anyone can use the result
+### Phase 4 — Collaborative Compute & Scale
+
+The contribution staircase begins (VISION.md Stage 1) alongside openness work.
+
+- [ ] **Job parallelism / agent swarms** — large jobs decomposed into independent sub-tasks across many nodes, results aggregated by a coordinator.
+- [ ] **Reward pooling & dedicated mining** — supporters point nodes at a specific project; pooled rewards. Task sponsorship; shareable project pages.
+- [ ] **Provider-passthrough auth** — authenticate with an existing AI provider (Anthropic, OpenAI, etc.); DeAI never touches billing or credentials.
+- [ ] **Cloud bridge nodes** — contribute existing provider subscription capacity; the provider bills the miner directly.
+- [ ] **Relay layer** — hide node IPs from the orchestrator (SECURITY.md Rule 6); turns Rules 1 & 3 from policy into architecture.
+- [ ] **Model marketplace** — community-published model registry; any model, any hardware tier.
+
+### Phase 5 — Mainnet Graduation
+
+Mainnet is a graduation exam, not a deadline. Entered only when the checklist in [docs/ECONOMICS.md](docs/ECONOMICS.md) is met: verification false-positive rate measured low, sybil resistance demonstrated, redemption-rate rule reproducible and stable, contracts audited, legal review complete.
+
+- [ ] **Graduation checklist cleared** on testnet.
+- [ ] **Mainnet deployment** — the token becomes transferable / value-bearing only here.
+- [ ] **Chain decision** — a cheap existing EVM L2 by default; a sovereign chain (Cosmos SDK / Substrate / app-rollup) only if verification becomes consensus. Explicitly downstream of the verification architecture.
+- [ ] **Key & rate-rule authority sunset** — multisig + timelock before any value; broader governance later.
+
+### Phase 6 — Model-Sharded Inference & Distributed Training (the goal)
+
+The actual destination (VISION.md Stages 2–3): no node needs to run a whole large model alone.
+
+- [ ] **Model-sharded inference** — a single inference split across many nodes (Petals-class); the literal "one node contributes part of the work."
+- [ ] **Per-shard verification** — TEE attestation per shard becomes especially valuable here.
+- [ ] **Training job orchestration** — coordinate multi-node training runs; handle node dropout and job resumption gracefully.
+- [ ] **Gradient aggregation** — secure aggregation of model updates across contributing nodes.
+- [ ] **Training verification** — cryptographic or statistical confirmation that nodes contributed honest compute to a training run.
+- [ ] **Long-job economics** — token model for hours/days-long jobs; partial payouts, checkpointing, slashing for early dropout.
+- [ ] **Open model registry** — community-trained models published; anyone contributes compute, anyone uses the result.
 
 ---
 
