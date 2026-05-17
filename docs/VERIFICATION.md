@@ -99,9 +99,13 @@ All design / local-mock work, none blocked on testing:
    it depends on the per-model reference stack
    ([VERIFICATION_PROTOCOL.md](VERIFICATION_PROTOCOL.md) §1) and is the
    substrate for difficulty/load-aware scheduling (README Phase 4).
-4. Switch rewards to off-chain accrual + claimable batch settlement (Merkle
-   distributor pattern) — removes per-task on-chain mint, decouples from chain
-   choice, kills a whole exploit/gas class. Buildable in mock mode.
+4. ✅ **Done.** Rewards accrue off-chain; settled once per epoch as a
+   cumulative Merkle root via `MerkleDistributor` (miners claim themselves).
+   Removes the per-task hot MINTER_ROLE key, makes cost O(epochs) not
+   O(tasks), and decouples the reward path from the chain choice. Python
+   side unit-tested; the Solidity contract is gated on CI (see
+   VERIFICATION_PROTOCOL.md §8). **Deferred (next layer):** tying accrual to
+   vesting + slash-reduces-accrual (ECONOMICS.md §4).
 5. Make identity cost something (mandatory minimum stake or proof-of-burn) so
    the optimistic economics are sound. (Overlaps the economics workstream.)
 

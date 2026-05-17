@@ -7,9 +7,15 @@
  *   npx hardhat run scripts/deploy.js --network amoy      (Polygon Amoy testnet)
  *
  * After deployment the script wires up roles so that:
- *   PaymentContract  → MINTER_ROLE  on DeAIToken
- *   SlashingContract → BURNER_ROLE  on DeAIToken
- *   Orchestrator     → MINTER_ROLE  on DeAIToken (for direct task rewards)
+ *   PaymentContract   → MINTER_ROLE  on DeAIToken
+ *   SlashingContract  → BURNER_ROLE  on DeAIToken
+ *   MerkleDistributor → MINTER_ROLE  on DeAIToken (mints only what a
+ *                       published cumulative root authorizes, on claim)
+ *   Orchestrator      → UPDATER_ROLE on MerkleDistributor (publish roots)
+ *
+ * The orchestrator is intentionally NOT granted MINTER_ROLE: rewards accrue
+ * off-chain and settle via the distributor, so there is no permanently-hot
+ * mint key on the task path (build-now #4).
  */
 import hre from "hardhat";
 
@@ -46,7 +52,15 @@ async function main() {
   const slashingAddr = await slashing.getAddress();
   console.log(`SlashingContract deployed: ${slashingAddr}`);
 
-  // ── 4. Wire roles ───────────────────────────────────────────────
+  // ── 4. MerkleDistributor ────────────────────────────────────────
+  // Reward settlement: orchestrator publishes cumulative roots, miners claim.
+  const Distributor = await ethers.getContractFactory("MerkleDistributor");
+  const distributor = await Distributor.deploy(tokenAddr, orchestratorAddr);
+  await distributor.waitForDeployment();
+  const distributorAddr = await distributor.getAddress();
+  console.log(`MerkleDistributor deployed:${distributorAddr}`);
+
+  // ── 5. Wire roles ───────────────────────────────────────────────
   const MINTER_ROLE = await token.MINTER_ROLE();
   const BURNER_ROLE = await token.BURNER_ROLE();
 
@@ -56,21 +70,25 @@ async function main() {
   await (await token.grantRole(BURNER_ROLE, slashingAddr)).wait();
   console.log(`Granted BURNER_ROLE → SlashingContract`);
 
-  // Orchestrator mints rewards directly to miners when tasks complete
-  await (await token.grantRole(MINTER_ROLE, orchestratorAddr)).wait();
-  console.log(`Granted MINTER_ROLE → Orchestrator (${orchestratorAddr})`);
+  // Distributor mints only what a published cumulative Merkle root authorizes.
+  await (await token.grantRole(MINTER_ROLE, distributorAddr)).wait();
+  console.log(`Granted MINTER_ROLE → MerkleDistributor`);
 
-  // ── 5. Summary ──────────────────────────────────────────────────
+  // Orchestrator publishes roots (UPDATER_ROLE granted in the distributor
+  // constructor). It is deliberately NOT a token minter — no hot mint key.
+
+  // ── 6. Summary ──────────────────────────────────────────────────
   console.log(`
 ────────────────────────────────────────────────
   DEPLOYMENT COMPLETE
 ────────────────────────────────────────────────
-  Network:          ${conn.networkName}
-  Orchestrator:     ${orchestratorAddr}
+  Network:           ${conn.networkName}
+  Orchestrator:      ${orchestratorAddr}
 
-  DeAIToken:        ${tokenAddr}
-  PaymentContract:  ${paymentAddr}
-  SlashingContract: ${slashingAddr}
+  DeAIToken:         ${tokenAddr}
+  PaymentContract:   ${paymentAddr}
+  SlashingContract:  ${slashingAddr}
+  MerkleDistributor: ${distributorAddr}
 ────────────────────────────────────────────────
 
   Save these addresses — you'll need them to configure

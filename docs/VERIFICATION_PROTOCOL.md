@@ -79,12 +79,13 @@ SUBMITTED
                                                                         └─ primary dishonest ─> SLASHED
 ```
 
-- `FINALIZED` = result returned, reward accrues to the primary. Under the
-  target economics this accrual is **unvested** (ECONOMICS.md §4) and only
-  becomes spendable after the vesting period — i.e. it is *finalized for
-  delivery* but *bonded for slashing* until vested. Off-chain accrual +
-  claimable batch settlement is build-now #4, **not yet built**; today the
-  ledger credits immediately.
+- `FINALIZED` = result returned, reward **accrues off-chain** to the primary.
+  Build-now #4 is **done**: there is no per-task mint; cumulative accrual is
+  settled once per epoch as a Merkle root via `MerkleDistributor`, and miners
+  claim themselves. Under the target economics this accrual is still meant to
+  be **unvested/bonded** until a vesting period elapses (ECONOMICS.md §4) —
+  that vesting layer, and slash-reduces-accrual, are the documented next step
+  (the accrual seam is built to accept them without rework).
 - `FINALIZED*` (no checker available) = accept optimistically rather than
   punish a provider for a thin network; the task is recorded as *unverified*.
   This is a deliberate availability-over-strictness choice for the bootstrap
@@ -235,7 +236,8 @@ not the intended production value.
 
 ## 8. Conformance ledger (code ⇄ spec — no drift)
 
-What `protocol/verification.py` + `protocol/orchestrator.py` implement **today**:
+What `protocol/{verification,orchestrator,ledger,chain_ledger,merkle}.py` +
+`chain/contracts/MerkleDistributor.sol` implement **today**:
 
 - ✅ `Verifier` seam; `ContentVerifier` default (legacy non-empty, no recheck);
   `RedundantExecutionVerifier` (well-formed gate, silent sampled re-dispatch to
@@ -247,14 +249,20 @@ What `protocol/verification.py` + `protocol/orchestrator.py` implement **today**
 - ❌ Committee adjudication, appeal window, verified-dishonesty slash (§5.2
   steps 2–4).
 - ❌ Per-model reference inference stack / model registry (§1).
-- ❌ Off-chain accrual + claimable vested settlement (build-now #4; today the
-  ledger credits immediately, not bonded/vested per ECONOMICS.md §4).
+- ✅ Off-chain accrual + claimable batch settlement (build-now #4):
+  `MerkleDistributor.sol` + `protocol/merkle.py`; orchestrator accrues and
+  publishes a cumulative root per epoch; `/claim/{wallet}` serves proofs;
+  no per-task mint; orchestrator no longer holds token MINTER_ROLE. ❌ still
+  open: the **vesting/bond** wrapper and slash-reduces-accrual (ECONOMICS.md
+  §4) — accrual is built to accept them but credits without a vesting delay
+  today. Solidity contract verified by the hardhat suite in CI, not locally
+  (sandbox solc download blocked).
 - ❌ Conditioned/adaptive `p`; final comparison method.
 - ✅ Self-reported hardware (GPU/VRAM) removed from pay and routing score
   (build-now #3, the verifiable half). The *measured* benchmark/tier
   replacement (§1, §7) remains ❌ deferred.
 
-Any change to either file must update this section in the same commit.
+Any change to those files must update this section in the same commit.
 
 ---
 

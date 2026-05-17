@@ -123,7 +123,7 @@ Until the relay layer is built, nodes connect directly and the orchestrator sees
 
 For honesty, the centralizations that exist **today** and are **not** the intended end state:
 
-1. **Single orchestrator.** One core-team node routes all tasks and holds `MINTER_ROLE` on the token. Task routing and token issuance are centralized for the bootstrapping phase. (Also documented in the README.) Decentralizing the orchestrator is a roadmap priority.
+1. **Single orchestrator.** One core-team node routes all tasks and is the sole holder of `UPDATER_ROLE` on `MerkleDistributor` (it alone publishes the cumulative reward roots). It no longer holds the token `MINTER_ROLE` — rewards accrue off-chain and the distributor mints only what a published root authorizes, so there is no permanently-hot mint key (build-now #4). Task routing and reward-root authority remain centralized for the bootstrapping phase. (Also documented in the README.) Decentralizing the orchestrator is a roadmap priority.
 2. **Token admin key.** `DeAIToken` grants `DEFAULT_ADMIN_ROLE` to the deploying wallet. That wallet can grant itself `MINTER_ROLE` and mint without limit. This is a deployment convenience for the testnet phase — it is **not** the intended final design. Before any mainnet deployment this role must be renounced, time-locked, or moved to governance. The exact mechanism is an open decision, not yet made.
 
 On the live testnet you are currently trusting the core team not to abuse these keys. The mission is to engineer that requirement away — not to pretend it doesn't exist. These are tracked as current-vs-target gaps.
