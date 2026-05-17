@@ -71,6 +71,8 @@ DeAI is a **Decentralized Physical Infrastructure Network (DePIN)** for AI infer
 3. **Execution** — The node runs model inference inside a secure, verifiable environment (TEE or ZK-ML)
 4. **Verification & Reward** — The result is cryptographically verified; the Smart Contract pays the node operator in DeAI tokens
 
+> **Status:** steps 3–4 describe the *target* design. Today inference runs in a normal process and "verification" is a placeholder non-empty-content check (`mock_verify`). Real TEE/ZK-ML verification and on-chain escrow payment are not yet implemented — see [Verification & economics (current state)](#verification--economics-current-state) below.
+
 ### Value Proposition
 
 | Stakeholder | Benefit |
@@ -113,6 +115,17 @@ Decentralizing the orchestrator is a Phase 3 priority. In the meantime, if you w
 
 Your orchestrator and the core team's run independently — miners choose which one to connect to.
 
+### Verification & economics (current state)
+
+The sections above describe the target system. Several core pieces are deliberately still placeholders, and we'd rather state that than imply protections that aren't there yet:
+
+- **Verification is a placeholder.** `mock_verify` in the orchestrator accepts any non-empty result. There is no Proof-of-Useful-Inference yet — real TEE attestation or ZK-ML verification is unbuilt. Until it exists, the network cannot detect a node that returns garbage, and the slashing economics cannot meaningfully trigger.
+- **No escrow in the live path.** `PaymentContract` (user deposit → escrow → release to miner) is written and unit-tested, but it is *not* wired into the running orchestrator. The live reward path mints DEAI directly to the miner on task completion — there is no user payment or escrow today.
+- **DEAI has no monetary value.** The contracts are deployed only on the Ethereum Sepolia *testnet*. Sepolia DEAI is a valueless test token used to prove the mechanics. Nothing here is real money.
+- **The chain is an open question.** Sepolia is for testing only. Whether DeAI ultimately runs on an existing chain or its own sovereign chain is an explicitly undecided, deferred decision — not committed in either direction.
+
+Closing the verification gap is the single highest priority before any of the token economics can be trusted.
+
 ---
 
 ## Roadmap
@@ -128,13 +141,13 @@ Your orchestrator and the core team's run independently — miners choose which 
 **Blockchain strategy:** Deploy smart contracts to a free testnet first (Ethereum Sepolia or Polygon Amoy — no real crypto needed, test tokens are free). Prove the economics work. Move to mainnet once there are real users. Evaluate a custom chain or framework (Cosmos SDK / Substrate) if volume justifies it — that decision stays open until Phase 3.
 
 - [x] **DeAI token contract** — ERC-20 token with mint/burn roles; written, tested (24/24 passing)
-- [x] **Payment contract** — escrow: user deposits tokens, released to miner on verified task completion; written, tested
+- [x] **Payment contract** — escrow: user deposits tokens, released to miner on verified task completion; written, tested — **not yet integrated into the live orchestrator path** (see *Verification & economics (current state)* above)
 - [x] **Slashing contract** — miners who return bad results lose a portion of their staked tokens; written, tested
 - [x] **Testnet deployment** — all three contracts live on Ethereum Sepolia
   - DeAIToken: [`0xE513DAb60018fc63bDB240605CE0816dE7751B27`](https://sepolia.etherscan.io/address/0xE513DAb60018fc63bDB240605CE0816dE7751B27)
   - PaymentContract: [`0x49F2ed162B5DEba2b768BFD79313FADdF3c075C8`](https://sepolia.etherscan.io/address/0x49F2ed162B5DEba2b768BFD79313FADdF3c075C8)
   - SlashingContract: [`0xDFea0F4436E3B30D2861D7b7Acf6c252Da28633c`](https://sepolia.etherscan.io/address/0xDFea0F4436E3B30D2861D7b7Acf6c252Da28633c)
-- [x] **On-chain rewards** — orchestrator mints real DEAI to miner wallets on task completion
+- [x] **On-chain rewards** — orchestrator mints DEAI test tokens to miner wallets on task completion (Sepolia testnet — no monetary value)
 - [x] **Node Client installer** — one-click setup scripts for Windows (`install_node.ps1`) and Linux/macOS (`install_node.sh`)
 - [x] **Marketplace API** — OpenAI-compatible endpoint with optional API key auth (`--api-key`)
 - [x] **Persistent Agent Runner** — `application/agent_runner.py`; runs on a token budget, pauses when exhausted, resumes on top-up

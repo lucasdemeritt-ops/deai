@@ -10,6 +10,14 @@ A user or miner on the DeAI network should never have to trust us. They should b
 
 ---
 
+## Current State vs. Target
+
+This document describes the **target** security properties of the network. Several are not yet enforced *by the system* — today they hold only because a single trusted orchestrator, run by the core team, behaves correctly and its code is open to audit.
+
+The distinction matters and we state it plainly: the Core Promise above says trust should be a *property of the system*, not a policy. Until the relay layer (Rule 6) and a decentralized orchestrator exist, Rules 1 and 3 are enforced by policy plus code review of a single operator — not yet by the architecture. Where that gap exists it is flagged inline as **[Current state]**. See also *Known Centralization (Current State)* at the end of this document.
+
+---
+
 ## Rule 1: IP Addresses Are Never Stored
 
 **What this means:**
@@ -24,6 +32,8 @@ An IP address can identify a person's physical location and ISP. In some countri
 - The orchestrator codebase is open source and auditable.
 - No third-party analytics or logging services are integrated.
 - Future versions will route node connections through a relay layer so the orchestrator never sees real IPs at all — only the relay does, transiently.
+
+**[Current state]** Enforced today by a single trusted orchestrator that sees connecting IPs transiently and is coded not to log or store them. This is a policy + auditable-code guarantee, not yet an architectural one — the relay layer (Rule 6) is what turns it into a true system property.
 
 ---
 
@@ -69,6 +79,8 @@ On-chain: 0x3f7a2c1b...  ← this is all anyone sees
 ```
 The hash proves the task existed and was verified. It reveals nothing about the content.
 
+**[Current state]** No prompt content is written to disk or chain anywhere in the codebase today — that part is real. The remaining gap is that the single orchestrator holds the full plaintext prompt in memory while routing each task. Nothing persists it, but that is currently a property of one trusted operator's code, not of the architecture. The relay layer and end-to-end task encryption are what close this.
+
 ---
 
 ## Rule 4: Wallet Addresses Are Pseudonymous, Not Anonymous
@@ -104,6 +116,17 @@ In Phase 4, direct node-to-orchestrator connections will be replaced with a rela
 - This is architecturally similar to how Tor separates the sender from the receiver.
 
 Until the relay layer is built, nodes connect directly and the orchestrator sees their IP transiently (but does not store it, per Rule 1).
+
+---
+
+## Known Centralization (Current State)
+
+For honesty, the centralizations that exist **today** and are **not** the intended end state:
+
+1. **Single orchestrator.** One core-team node routes all tasks and holds `MINTER_ROLE` on the token. Task routing and token issuance are centralized for the bootstrapping phase. (Also documented in the README.) Decentralizing the orchestrator is a roadmap priority.
+2. **Token admin key.** `DeAIToken` grants `DEFAULT_ADMIN_ROLE` to the deploying wallet. That wallet can grant itself `MINTER_ROLE` and mint without limit. This is a deployment convenience for the testnet phase — it is **not** the intended final design. Before any mainnet deployment this role must be renounced, time-locked, or moved to governance. The exact mechanism is an open decision, not yet made.
+
+On the live testnet you are currently trusting the core team not to abuse these keys. The mission is to engineer that requirement away — not to pretend it doesn't exist. These are tracked as current-vs-target gaps.
 
 ---
 

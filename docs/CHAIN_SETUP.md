@@ -4,10 +4,10 @@ By default the orchestrator runs in **mock mode**: everything works with an in-m
 
 **On-chain mode** adds real contract calls on top of mock mode:
 - The SlashingContract tracks miner reputation on-chain (task completions, slashes)
-- The eligibility gate checks a miner's stake before routing tasks to them
+- The eligibility gate checks a miner has **not been ejected** before routing tasks to them — staking is optional, **not** required
 - Slashed tokens are permanently burned from circulation
 
-Payment tracking (the PaymentContract) stays in-memory for now — full integration requires users to hold DEAI tokens and sign transactions, which needs a wallet UI. That's Phase 3.
+The PaymentContract (user deposit → escrow → release to miner) is **not** integrated at all — neither on-chain nor in-memory. In both mock and chain mode the live path simply mints a DEAI reward directly to the miner on task completion; there is no user payment or escrow. Full escrow integration needs user wallets and signing, and is deferred (roadmap Phase 3).
 
 ---
 
@@ -99,7 +99,9 @@ Running in ON-CHAIN mode — SlashingContract wired
 
 ## Step 5 — Connect a node with a wallet
 
-Miners need to stake DEAI tokens before they'll be considered eligible. For local dev, mint some tokens first using the Hardhat console or a script.
+Staking is **optional**. Any miner that has not been ejected is eligible to receive tasks (`isEligible` returns `!ejected` — there is no minimum-stake gate). Stake acts only as a protection buffer: a miner with stake absorbs a bad result instead of being ejected on the first one. You can run a node with no stake at all.
+
+If you specifically want to test the stake/slash path, mint yourself some DEAI and call `stake()` via the Hardhat console first; otherwise you can skip staking entirely.
 
 Start the node with its wallet address:
 
@@ -148,8 +150,8 @@ To deploy your own instance (e.g. for testing contract changes):
 | | Mock mode | Chain mode |
 |---|---|---|
 | Ledger | In-memory, resets on restart | SlashingContract on-chain, persistent |
-| Eligibility check | All nodes eligible | Checks stake ≥ MIN_STAKE (100 DEAI) |
+| Eligibility check | All nodes eligible | Any miner not ejected is eligible — stake is optional, **not** required |
 | Task completion | Increments in-memory counter | Also calls `recordCompletion()` on-chain |
-| Bad results | Logged, no penalty | Calls `slash()` — burns 10 DEAI from stake |
-| Payment tracking | In-memory | In-memory (PaymentContract integration is Phase 3) |
+| Bad results | Logged, no penalty | Calls `slash()` — burns up to 10 DEAI from stake; a miner with no stake is ejected on the first bad result |
+| Payment / escrow | Not implemented (direct mint only) | Not implemented (direct mint only — PaymentContract not wired; deferred) |
 | Requires blockchain | No | Yes |
