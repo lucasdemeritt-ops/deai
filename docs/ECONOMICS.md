@@ -9,12 +9,15 @@
 
 ## First Principle — The Redemption Invariant
 
-**DEAI is always redeemable for real inference at a protocol-defined rate.**
+**DEAI is always redeemable for real inference, at a rate that is
+transparently and verifiably determined — never set at anyone's discretion.**
 
 This is the top of the document, above every other choice, because it is what
 separates a real economic system from a Ponzi. The distinction is not how many
 tokens exist or how they are marketed — it is whether the token can be
-extinguished for something with inherent worth at a rate the protocol enforces.
+extinguished for something with inherent worth at a rate nobody can move at
+will. The rate must *evolve* (hardware and models get cheaper); the iron
+property is that it evolves by an open, verifiable rule, never by discretion.
 
 A speculative coin is worth only what the next buyer will pay. A real one has a
 floor: cheap tokens get redeemed for real work, which pulls value back up. That
@@ -49,10 +52,11 @@ not sidelined. It earns the "real, not Ponzi" position through the invariant,
 not through marketing. Two consequences follow:
 
 1. **Inference is priced in compute units, not dollars-of-token.** The token
-   *is* the compute unit. A defined amount of DEAI always buys a defined unit
-   of inference work. The token may trade *above* this floor (scarcity,
-   growth, speculation); it structurally cannot collapse while the network can
-   do work and honor redemption.
+   *is* the compute unit. A given amount of DEAI always redeems for a
+   corresponding unit of inference work at the transparently-determined rate
+   (see the rate-mechanism subsection below). The token may trade *above* this
+   floor (scarcity, growth, speculation); it structurally cannot collapse
+   while the network can do work and honor redemption.
 2. **Stablecoin / fiat on-ramps are a necessity, not an option.** Volatility is
    not eliminated — it is pushed to the on/off-ramp, the way a card tap hides
    interbank settlement. Users and miners interact through a stable edge; the
@@ -81,15 +85,66 @@ mitigations, stated without overselling:
 (Hardware-entropy/degradation cost is deliberately out of scope — not a
 material factor worth documenting.)
 
-### The central hard problem: the redemption *rate*
+### The rate mechanism & the immutable self-check (the deepest problem)
 
-The invariant ("always redeemable") is bedrock. The **rate** (how much DEAI per
-unit of inference) is effectively a managed peg to a compute unit. It must
-adjust over time as hardware gets cheaper and models get more efficient, and it
-must not be trivially gameable. **Designing the rate-setting and rate-adjustment
-mechanism is the central economic research task**, and it is precisely what the
-non-transferable testnet exists to work out with real data. The invariant is
-fixed; the rate is a governed, empirically-tuned parameter.
+The invariant is bedrock; the **rate** is not a number anyone sets — it is the
+output of a transparent rule. The enemy is *discretion*, not *change*: the rate
+must evolve as hardware and models get cheaper, but no party — the core team
+included — may move it at will. A team that merely *promises* not to is not
+*credibly* honest, because users can verify rules, not intentions.
+
+**How the rate is determined (recommended direction).** The network measures
+its own delivered compute — standardized benchmark / sampled work run across
+many nodes, the *same useful-work measurement the verification layer produces*
+— and the rate is a deterministic, open function of that on-network
+measurement and observed supply/demand, market-discovered within guardrails
+(bounded change per epoch, so it tracks reality without being whipsawed or
+yanked). No external oracle (that only relocates the trust problem to the
+oracle); no team pronouncement; no naive vote (the rate is an *adversarial*
+parameter — miners and users want it in opposite directions — so it cannot be
+a simple governance knob).
+
+Rate honesty is therefore *downstream of verification honesty*: the rate can be
+no more trustworthy than the work-measurement beneath it. One problem, not two
+— solve trustworthy measurement once (the keystone), and both honest pay and
+honest pricing follow from it.
+
+**What "immutable self-check" must mean.** Not "can never change" — the rule
+must be able to evolve, so naive immutability is the wrong target. It means the
+rule and its measurement *cannot be changed silently, instantly, or at
+discretion*, and its output is independently reproducible. Concretely, all
+four:
+
+1. The rule and measurement are open, on-chain logic — the same code everyone
+   runs, not a number in a team database.
+2. Every input is published and timestamped on a tamper-evident log as it
+   occurs, signed by the measuring nodes — the input set cannot be edited
+   after the fact.
+3. Anyone can recompute the rate from the public inputs and the open rule and
+   get the *identical* result. Any divergence between the published rate and
+   the reproducible one is instantly detectable by anyone.
+4. The rule itself can change only via a pre-announced, on-chain, timelocked
+   path (the same sunset/governance mechanism as the admin key, §6) — never
+   sprung, never silent, never instant. A coming change is visible far enough
+   ahead that anyone who disagrees can exit before it takes effect.
+
+If all four hold, "manipulating the ledger when we see fit" is not merely
+promised against — it is *impossible and publicly detectable*. That is the
+mission, applied to monetary policy.
+
+**Honest open problems (this will take more than one attempt).**
+
+- Trustworthy self-measurement, when the measurers are the same potentially
+  adversarial nodes, is gated on the verification keystone — unsolved until
+  that matures.
+- Guardrail and epoch parameters (max move per epoch, measurement cadence) are
+  empirical — testnet-tuned, not derivable on paper.
+- The timelocked change path is still a *governance* surface for an
+  adversarial parameter; making it capture-resistant is an open design
+  problem, not a solved one.
+
+These are written into the plan as scoped problems with a direction — not as
+solved claims.
 
 ---
 
@@ -160,8 +215,10 @@ framework now; numbers are empirical, tuned on testnet.
   reputation-weighted (by verified work) is more mission-aligned but complex.
   Commit only to the sunset milestone now.
 
-The redemption rate (§1) is itself a governed parameter — its control must be
-part of the same sunset/governance plan, not a permanent team lever.
+The redemption rate (§1) is not a discretionary lever at all — only the *rule*
+that computes it can change, and only via this same pre-announced, timelocked
+path. No silent or instant change exists by construction (the immutable
+self-check, §1).
 
 ---
 
@@ -175,7 +232,9 @@ parameters are tuned.
 **Graduation is a checklist, never a date:**
 1. Verification false-positive rate measured and low.
 2. Sybil resistance demonstrated under adversarial testing.
-3. Redemption-rate mechanism observed stable across simulated cost shifts.
+3. Redemption-rate rule independently reproducible from public inputs,
+   observed stable across simulated cost shifts, with no discretionary or
+   instant override path in steady state.
 4. Supply/premium dynamics observed stable.
 5. Contracts audited.
 6. Legal review complete (§8).
@@ -200,27 +259,38 @@ keys, sits in securities/regulatory territory in many jurisdictions.
 ## Chosen shape (one paragraph)
 
 DEAI is the network's economic medium, made real (not Ponzi) by a
-protocol-enforced invariant: it is always redeemable for inference at a defined
-rate. Inference is priced in compute units the token represents; volatility is
+protocol-enforced invariant: it is always redeemable for inference at a rate
+that is transparently and verifiably determined, never at anyone's discretion.
+Inference is priced in compute units the token represents; volatility is
 absorbed at stablecoin/fiat on-ramps, so normal users and miners touch a stable
 edge over one anchored internal economy. Value floor = redeemable work; premium
 above it is managed by finite decaying emission and burn sinks tied to real
 revenue. No upfront stake — unvested earnings are a slashable bond, solving
 sybil resistance, dump pressure, and no-barrier-to-entry together. The
-redemption *rate* is a governed, testnet-tuned parameter and the central
-research task. Mint and rate authority sunset to multisig+timelock before any
-value; non-transferable through testnet; graduation is an explicit checklist
-gated on measured verification quality, rate stability, and legal review.
+redemption *rate* is set by no one — it is the reproducible output of an open
+rule over the network's own verified work-measurement, market-discovered within
+guardrails and changeable only via a pre-announced timelocked path (the
+immutable self-check). Mint and rate-rule authority sunset to multisig+timelock
+before any value; non-transferable through testnet; graduation is an explicit
+checklist gated on measured verification quality, rate-rule reproducibility,
+and legal review.
 
 ## Decided vs. deferred
 
 - **Decided:** redemption-anchored work-token model (the invariant is
-  first-principle); stablecoin/fiat on-ramps as a necessity; vesting-bond
-  sybil model; finite decaying bootstrap emission; burn sinks; key + rate
-  authority sunset; non-transferable-until-graduation; checklist graduation;
+  first-principle, softened to "transparently and verifiably determined, never
+  at discretion"); rate is the reproducible output of an open rule over the
+  network's own verified work-measurement, market-discovered within guardrails
+  (the immutable self-check: open on-chain logic, tamper-evident inputs,
+  publicly recomputable, rule changes only via pre-announced timelocked path);
+  stablecoin/fiat on-ramps as a necessity; vesting-bond sybil model; finite
+  decaying bootstrap emission; burn sinks; key + rate-rule authority sunset;
+  non-transferable-until-graduation; checklist graduation;
   cashback-on-existing-usage as the honest adoption framing.
-- **Deferred to empirical testnet tuning:** the redemption-rate setting and
-  adjustment mechanism (central task), slash magnitude, check-probability `p`,
-  comparison tolerance, emission/decay/vesting curves.
+- **Deferred / open hard problems (more than one attempt expected):**
+  trustworthy self-measurement (gated on the verification keystone);
+  guardrail and epoch parameters; capture-resistance of the timelocked
+  rule-change path; slash magnitude; check-probability `p`; comparison
+  tolerance; emission/decay/vesting curves.
 - **Deferred to later stages:** Stage 2 sharded reward attribution; governance
   mechanism design; legal counsel engagement.
