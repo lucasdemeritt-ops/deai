@@ -100,6 +100,19 @@ DeAI is a **Decentralized Physical Infrastructure Network (DePIN)** for AI infer
 └──────────────────────────────────────────┘
 ```
 
+### Centralization trade-off (current state)
+
+The compute layer is fully decentralized — anyone can run a miner node and earn tokens. The orchestrator, however, is currently a single trusted node run by the core team. It holds `MINTER_ROLE` on the token contract and signs all reward transactions, meaning task routing and token issuance are centralized for now. This is a deliberate bootstrapping trade-off, not a permanent design.
+
+Decentralizing the orchestrator is a Phase 3 priority. In the meantime, if you want to run your own independent orchestrator:
+
+1. Deploy fresh contracts: `npx hardhat run scripts/deploy.js --network sepolia`
+2. Grant your orchestrator wallet `MINTER_ROLE` on your DeAIToken deployment
+3. Start with: `python protocol/orchestrator.py --chain --token-contract 0x... --slashing-contract 0x... --orchestrator-key 0x...`
+4. Point your miners at your orchestrator URL instead of the default
+
+Your orchestrator and the core team's run independently — miners choose which one to connect to.
+
 ---
 
 ## Roadmap
