@@ -146,6 +146,7 @@ Your orchestrator and the core team's run independently — miners choose which 
 - [ ] **Dedicated Mining** — miners point their node at a specific project or agent instead of the general pool
 - [ ] Project pages — shareable public page showing an agent's purpose, wallet, and live contributor list
 - [ ] Mining pools — group nodes together under a shared project identity
+- [ ] **Agent swarms** — orchestrate multi-agent pipelines across multiple nodes in parallel; large tasks decomposed into subtasks, each handled by a dedicated node, results aggregated by a coordinator agent
 - [ ] ZK-Proof vs. TEE — implement real cryptographic verification to replace mock verifier
 
 ### Phase 4 — Provider Auth, Scale & Openness
