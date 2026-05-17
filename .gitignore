@@ -19,6 +19,9 @@ dist/
 .DS_Store
 Thumbs.db
 
+# Misc
+*.rtf
+
 # Chain (node_modules etc. are covered by chain/.gitignore)
 chain/node_modules/
 chain/artifacts/
