@@ -103,9 +103,10 @@ All design / local-mock work, none blocked on testing:
    cumulative Merkle root via `MerkleDistributor` (miners claim themselves).
    Removes the per-task hot MINTER_ROLE key, makes cost O(epochs) not
    O(tasks), and decouples the reward path from the chain choice. Python
-   side unit-tested; the Solidity contract is gated on CI (see
-   VERIFICATION_PROTOCOL.md §8). **Deferred (next layer):** tying accrual to
-   vesting + slash-reduces-accrual (ECONOMICS.md §4).
+   side unit-tested in CI; the Solidity is compiled by CI and its
+   behavioural test runs via `npm run test:merkle` (not yet in the CI
+   gate — see VERIFICATION_PROTOCOL.md §8). **Deferred (next layer):**
+   tying accrual to vesting + slash-reduces-accrual (ECONOMICS.md §4).
 5. Make identity cost something (mandatory minimum stake or proof-of-burn) so
    the optimistic economics are sound. (Overlaps the economics workstream.)
 

@@ -255,8 +255,14 @@ What `protocol/{verification,orchestrator,ledger,chain_ledger,merkle}.py` +
   no per-task mint; orchestrator no longer holds token MINTER_ROLE. ❌ still
   open: the **vesting/bond** wrapper and slash-reduces-accrual (ECONOMICS.md
   §4) — accrual is built to accept them but credits without a vesting delay
-  today. Solidity contract verified by the hardhat suite in CI, not locally
-  (sandbox solc download blocked).
+  today. Verification status of the Solidity: it is **compiled** by CI
+  (`npx hardhat compile`, real solc) and compiles cleanly; its behavioural
+  test (`chain/test/MerkleDistributor.test.js`) runs via
+  `npm run test:merkle`, **not yet in the CI gate** — wiring two Hardhat
+  test files into one `npm test` run hit a multi-file mocha/network
+  lifecycle issue that is a tracked follow-up. The Python side
+  (`merkle.py`) is unit-tested in CI and its roots were cross-checked
+  against the JS tree.
 - ❌ Conditioned/adaptive `p`; final comparison method.
 - ✅ Self-reported hardware (GPU/VRAM) removed from pay and routing score
   (build-now #3, the verifiable half). The *measured* benchmark/tier
