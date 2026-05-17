@@ -5,7 +5,7 @@ The network brain. Responsibilities:
   - Accept inference requests via HTTP (OpenAI-compatible API)
   - Maintain a registry of connected Worker Nodes
   - Dispatch tasks to the best available node (scored routing)
-  - Collect results, run mock verification, return to caller
+  - Collect results, run pluggable verification, return to caller
   - Track basic network stats and earnings
 
 Routing score (higher = better candidate):
@@ -51,6 +51,7 @@ from shared.schemas import (
     WSMessage,
 )
 from ledger import Ledger
+from verification import Verifier, ContentVerifier, make_verifier
 
 logging.basicConfig(
     level=logging.INFO,
@@ -103,6 +104,11 @@ stats = {"requests": 0, "completed": 0, "failed": 0}
 # earnings ledger
 ledger = Ledger()
 
+# Verification policy. Default = ContentVerifier (legacy non-empty check, no
+# recheck) so mock mode and CI are unchanged. --verify-sample-rate swaps in the
+# optimistic redundant-execution verifier. See docs/VERIFICATION.md.
+verifier: Verifier = ContentVerifier()
+
 
 # ── Routing ───────────────────────────────────────────────────────────────────
 
@@ -138,15 +144,22 @@ def score_node(node: NodeConnection, model: str) -> int:
     return score
 
 
-def find_best_node(model: str) -> Optional[tuple[NodeConnection, int, str]]:
+def find_best_node(
+    model: str, exclude: Optional[set] = None
+) -> Optional[tuple[NodeConnection, int, str]]:
     """
     Return (best_node, score, reason) for the given model, or None if no node available.
-    Only considers idle nodes. In chain mode, skips miners that have been ejected
-    from the SlashingContract (stake burned below minimum).
+    Only considers idle nodes. `exclude` is a set of node_ids to skip — used by
+    redundant verification so the recheck lands on a *different* node than the
+    one that produced the primary result. In chain mode, also skips miners that
+    have been ejected from the SlashingContract (stake burned below minimum).
     """
+    exclude = exclude or set()
     candidates = []
     for node in nodes.values():
         if node.status != NodeStatus.idle:
+            continue
+        if node.info.node_id in exclude:
             continue
         if chain_ledger is not None and node.info.wallet:
             if not chain_ledger.is_eligible(node.info.wallet):
@@ -173,15 +186,6 @@ def find_best_node(model: str) -> Optional[tuple[NodeConnection, int, str]]:
         parts.append(f"{len(candidates)}-candidates")
 
     return best_node, best_score, "+".join(parts)
-
-
-def mock_verify(result: TaskResult) -> bool:
-    """
-    Placeholder verification step.
-    Phase 1: checks content is non-empty after stripping whitespace.
-    Later replaced with ZK-proof or TEE attestation.
-    """
-    return bool(result.content and result.content.strip())
 
 
 # ── WebSocket: Node registration & task loop ──────────────────────────────────
@@ -218,43 +222,18 @@ async def node_endpoint(ws: WebSocket):
 
             elif msg.type == "task_complete":
                 result = TaskResult(**msg.payload)
-                result.verified = mock_verify(result)
 
                 node = nodes[node_id]
                 node.status = NodeStatus.idle
                 node.tasks_completed += 1
-
                 results[result.task_id] = result
-                stats["completed"] += 1
 
-                earned = ledger.record_completion(
-                    node_id=node_id,
-                    task_id=result.task_id,
-                    output_tokens=result.tokens_used,
-                    had_gpu=node.info.gpu,
-                )
+                log.info(f"Result in    id={result.task_id}  node={node_id}  tokens={result.tokens_used}")
 
-                log.info(f"Task done    id={result.task_id}  node={node_id}  verified={result.verified}  tokens={result.tokens_used}  earned={earned:.2f}")
-
-                # On-chain: mint reward tokens + record reputation (fire-and-forget)
-                if chain_ledger is not None and node.info.wallet and result.verified:
-                    asyncio.create_task(
-                        asyncio.to_thread(
-                            chain_ledger.record_completion_onchain,
-                            node.info.wallet,
-                            result.tokens_used,
-                            node.info.gpu,
-                        )
-                    )
-
-                # On-chain: slash if result failed verification
-                if chain_ledger is not None and node.info.wallet and not result.verified:
-                    log.warning(f"Slashing node for bad result  node={node_id}  wallet={node.info.wallet[:10]}...")
-                    asyncio.create_task(
-                        asyncio.to_thread(chain_ledger.slash_onchain, node.info.wallet)
-                    )
-
-                # Wake up the waiting HTTP request
+                # Verification, ledger, and on-chain settlement happen in the
+                # HTTP path — it owns the task context and can re-dispatch for
+                # a redundant check before any reward is finalized. Here we
+                # just hand the raw result back to the waiting request.
                 if result.task_id in pending_events:
                     pending_events[result.task_id].set()
 
@@ -279,40 +258,28 @@ async def node_endpoint(ws: WebSocket):
             log.info(f"Node removed  id={node_id}  remaining={len(nodes)}")
 
 
-# ── HTTP: OpenAI-compatible inference endpoint ────────────────────────────────
+# ── Dispatch ──────────────────────────────────────────────────────────────────
 
-@app.post("/v1/chat/completions", response_model=ChatResponse)
-async def chat_completions(req: ChatRequest, _auth=Depends(_check_api_key)):
-    stats["requests"] += 1
-
-    task = Task(
-        model=req.model,
-        messages=req.messages,
-        max_tokens=req.max_tokens or 512,
-        temperature=req.temperature or 0.7,
-    )
-
-    log.info(f"Request recv  id={task.task_id}  model={req.model}  nodes_online={len(nodes)}")
-
-    # Find the best node (retry for up to 30 seconds if all are busy)
+async def _dispatch_and_wait(
+    task: Task, exclude: Optional[set] = None
+) -> tuple[Optional[TaskResult], Optional[NodeConnection], str]:
+    """
+    Find an idle node (skipping `exclude`), dispatch the task, await the result.
+    Returns (result, node, status) where status is 'ok' | 'no_node' | 'timeout'.
+    On anything other than 'ok', result and node are None.
+    """
     match = None
     deadline = time.time() + 30
     while time.time() < deadline:
-        match = find_best_node(req.model)
+        match = find_best_node(task.model, exclude)
         if match:
             break
         await asyncio.sleep(0.5)
 
     if match is None:
-        stats["failed"] += 1
-        raise HTTPException(
-            status_code=503,
-            detail=f"No nodes available for model '{req.model}'. Try again shortly or connect a node.",
-        )
+        return None, None, "no_node"
 
     node, score, reason = match
-
-    # Dispatch to node
     node.status = NodeStatus.busy
     node.last_task_time = time.time()
     event = asyncio.Event()
@@ -331,29 +298,130 @@ async def chat_completions(req: ChatRequest, _auth=Depends(_check_api_key)):
     await node.ws.send_text(json.dumps(dispatch_msg))
     log.info(f"Dispatched   id={task.task_id}  to={node.info.node_id}  score={score}  reason={reason}")
 
-    # Wait for result (60s timeout)
     try:
         await asyncio.wait_for(event.wait(), timeout=60.0)
     except asyncio.TimeoutError:
-        del pending_events[task.task_id]
+        pending_events.pop(task.task_id, None)
         node.status = NodeStatus.idle
+        return None, None, "timeout"
+
+    pending_events.pop(task.task_id, None)
+    result = results.pop(task.task_id, None)
+    if result is None:
+        return None, None, "timeout"
+    return result, node, "ok"
+
+
+def _slash_for_bad_result(node: NodeConnection, reason: str) -> None:
+    """
+    Unambiguously bad result (e.g. empty). Preserves the prior on-chain slash.
+    A redundant-verification *mismatch* does NOT come here — that path requires
+    committee escalation and must not auto-slash (see chat_completions and
+    docs/VERIFICATION.md on false-positive slashing).
+    """
+    log.warning(f"Bad result   node={node.info.node_id}  reason={reason}")
+    if chain_ledger is not None and node.info.wallet:
+        asyncio.create_task(asyncio.to_thread(chain_ledger.slash_onchain, node.info.wallet))
+
+
+# ── HTTP: OpenAI-compatible inference endpoint ────────────────────────────────
+
+@app.post("/v1/chat/completions", response_model=ChatResponse)
+async def chat_completions(req: ChatRequest, _auth=Depends(_check_api_key)):
+    stats["requests"] += 1
+
+    task = Task(
+        model=req.model,
+        messages=req.messages,
+        max_tokens=req.max_tokens or 512,
+        temperature=req.temperature or 0.7,
+    )
+
+    log.info(f"Request recv  id={task.task_id}  model={req.model}  nodes_online={len(nodes)}")
+
+    primary, primary_node, status = await _dispatch_and_wait(task)
+    if status == "no_node":
+        stats["failed"] += 1
+        raise HTTPException(
+            status_code=503,
+            detail=f"No nodes available for model '{req.model}'. Try again shortly or connect a node.",
+        )
+    if status == "timeout":
         stats["failed"] += 1
         raise HTTPException(status_code=504, detail="Node did not respond in time.")
 
-    del pending_events[task.task_id]
-    result = results.pop(task.task_id, None)
-
-    if result is None or not result.verified:
+    # Cheap local gate — replaces the old mock_verify non-empty check.
+    if not verifier.well_formed(primary):
+        stats["failed"] += 1
+        _slash_for_bad_result(primary_node, "malformed/empty result")
         raise HTTPException(status_code=500, detail="Task result failed verification.")
 
+    # Optimistic redundant check (Standard tier, docs/VERIFICATION.md). Sampled
+    # and silent: the node is not told it is being checked.
+    if verifier.should_recheck(task, primary):
+        shadow = Task(
+            model=task.model,
+            messages=task.messages,
+            max_tokens=task.max_tokens,
+            temperature=task.temperature,
+        )
+        r2, n2, s2 = await _dispatch_and_wait(
+            shadow, exclude={primary_node.info.node_id}
+        )
+        if s2 != "ok" or not verifier.well_formed(r2):
+            # No independent checker free — cannot verify. Accept optimistically
+            # rather than punish a provider for a thin network; record that this
+            # task went unverified.
+            log.warning(f"VERIFY skip   id={task.task_id}  reason=no-checker-available")
+        else:
+            outcome = verifier.compare(task, primary, r2)
+            log.info(
+                f"VERIFY {'OK ' if outcome.accepted else 'MISMATCH'}  "
+                f"id={task.task_id}  primary={primary_node.info.node_id}  "
+                f"checker={n2.info.node_id}  {outcome.detail}"
+            )
+            if not outcome.accepted:
+                stats["failed"] += 1
+                # Escalation/committee not built yet. Do NOT auto-slash —
+                # docs/VERIFICATION.md flags false-positive slashing of an
+                # honest provider as existential.
+                raise HTTPException(
+                    status_code=502,
+                    detail="Result failed redundant verification; committee escalation required.",
+                )
+
+    # Accepted → finalize the reward (off-chain ledger + optional on-chain mint).
+    primary.verified = True
+    stats["completed"] += 1
+    earned = ledger.record_completion(
+        node_id=primary_node.info.node_id,
+        task_id=primary.task_id,
+        output_tokens=primary.tokens_used,
+        had_gpu=primary_node.info.gpu,
+    )
+    log.info(
+        f"Task done    id={primary.task_id}  node={primary_node.info.node_id}  "
+        f"tokens={primary.tokens_used}  earned={earned:.2f}"
+    )
+
+    if chain_ledger is not None and primary_node.info.wallet:
+        asyncio.create_task(
+            asyncio.to_thread(
+                chain_ledger.record_completion_onchain,
+                primary_node.info.wallet,
+                primary.tokens_used,
+                primary_node.info.gpu,
+            )
+        )
+
     prompt_tokens = sum(len(m.content.split()) for m in req.messages)
-    completion_tokens = len(result.content.split())
+    completion_tokens = len(primary.content.split())
 
     return ChatResponse(
         model=req.model,
         choices=[
             Choice(
-                message=Message(role=Role.assistant, content=result.content),
+                message=Message(role=Role.assistant, content=primary.content),
                 finish_reason="stop",
             )
         ],
@@ -441,6 +509,17 @@ if __name__ == "__main__":
                         default=os.getenv("DEAI_ORCHESTRATOR_KEY"),
                         help="Orchestrator wallet private key (needs MINTER_ROLE + ORCHESTRATOR_ROLE)")
 
+    # Verification (Standard tier — docs/VERIFICATION.md)
+    parser.add_argument("--verify-sample-rate", type=float,
+                        default=float(os.getenv("DEAI_VERIFY_SAMPLE_RATE", "0.0")),
+                        help="Fraction of tasks [0..1] silently re-run on a second "
+                             "node for redundant verification. 0 = legacy non-empty "
+                             "check only, no rechecks (default).")
+    parser.add_argument("--verify-threshold", type=float,
+                        default=float(os.getenv("DEAI_VERIFY_THRESHOLD", "0.85")),
+                        help="Agreement threshold [0..1] for redundant verification "
+                             "(default 0.85). Only used when --verify-sample-rate > 0.")
+
     args = parser.parse_args()
 
     if args.api_key:
@@ -448,6 +527,15 @@ if __name__ == "__main__":
         log.info("API key authentication enabled on /v1/chat/completions")
     else:
         log.info("Running in open-access mode (no API key required)")
+
+    verifier = make_verifier(args.verify_sample_rate, args.verify_threshold)
+    if args.verify_sample_rate > 0:
+        log.info(
+            f"Verification: redundant execution ENABLED  "
+            f"sample_rate={args.verify_sample_rate}  threshold={args.verify_threshold}"
+        )
+    else:
+        log.info("Verification: content-only (legacy non-empty check; no redundant rechecks)")
 
     if args.chain:
         missing = [n for n, v in [

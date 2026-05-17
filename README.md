@@ -71,7 +71,7 @@ DeAI is a **Decentralized Physical Infrastructure Network (DePIN)** for AI infer
 3. **Execution** — The node runs model inference inside a secure, verifiable environment (TEE or ZK-ML)
 4. **Verification & Reward** — The result is cryptographically verified; the Smart Contract pays the node operator in DeAI tokens
 
-> **Status:** steps 3–4 describe the *target* design. Today inference runs in a normal process and "verification" is a placeholder non-empty-content check (`mock_verify`). Real TEE/ZK-ML verification and on-chain escrow payment are not yet implemented — see [Verification & economics (current state)](#verification--economics-current-state) below.
+> **Status:** steps 3–4 describe the *target* design. Today inference runs in a normal process. Verification now goes through a pluggable `Verifier` seam: the default is still a non-empty-content check, with an *optimistic redundant-execution* verifier available behind `--verify-sample-rate` (off by default). Committee escalation, the empirical comparison method, TEE/zkML tiers, and on-chain escrow payment are not yet implemented — see [Verification & economics (current state)](#verification--economics-current-state) below.
 
 ### Value Proposition
 
@@ -119,7 +119,7 @@ Your orchestrator and the core team's run independently — miners choose which 
 
 The sections above describe the target system. Several core pieces are deliberately still placeholders, and we'd rather state that than imply protections that aren't there yet:
 
-- **Verification is a placeholder.** `mock_verify` in the orchestrator accepts any non-empty result. There is no Proof-of-Useful-Inference yet — real TEE attestation or ZK-ML verification is unbuilt. Until it exists, the network cannot detect a node that returns garbage, and the slashing economics cannot meaningfully trigger.
+- **Verification is early.** The old `mock_verify` is gone — replaced by a pluggable `Verifier` seam (`protocol/verification.py`). The default `ContentVerifier` still only checks for non-empty content (legacy behaviour, so nothing changes unless opted in). An optimistic `RedundantExecutionVerifier` exists and is unit-tested: with a sampling rate it silently re-runs a task on a second node and compares. It is **off by default** and still incomplete — committee escalation is not built (a two-sample mismatch is rejected but no node is auto-slashed, deliberately, to avoid false-positive slashing of honest providers), the comparison method is a labelled placeholder pending empirical work, and the per-model reference inference stack does not exist yet. So real Proof-of-Useful-Inference is in progress, not done.
 - **No escrow in the live path.** `PaymentContract` (user deposit → escrow → release to miner) is written and unit-tested, but it is *not* wired into the running orchestrator. The live reward path mints DEAI directly to the miner on task completion — there is no user payment or escrow today.
 - **DEAI has no monetary value.** The contracts are deployed only on the Ethereum Sepolia *testnet*. Sepolia DEAI is a valueless test token used to prove the mechanics. Nothing here is real money.
 - **The chain is an open question.** Sepolia is for testing only. Whether DeAI ultimately runs on an existing chain or its own sovereign chain is an explicitly undecided, deferred decision — not committed in either direction.
@@ -170,7 +170,7 @@ One-line summary of the sequencing: **trustworthy work-measurement is the keysto
 
 Nothing below ships with real value until this phase is proven. All of it runs on the non-transferable testnet. See [docs/VERIFICATION.md](docs/VERIFICATION.md) and [docs/ECONOMICS.md](docs/ECONOMICS.md).
 
-- [ ] **Real verification** — replace `mock_verify` with a `Verifier` interface + optimistic redundant execution (sampled re-dispatch, semantic tolerance, escalation, economic slashing). Makes slashing meaningful.
+- [~] **Real verification** — *in progress.* `Verifier` seam landed (`protocol/verification.py`) with an optimistic redundant-execution verifier (sampled silent re-dispatch + tolerance comparison), unit-tested, off by default. Remaining: committee escalation + blame attribution, the empirically-chosen comparison method, per-model reference inference stack, then turn sampling on. This is what makes slashing meaningful.
 - [ ] **Trustworthy work-measurement** — the shared substrate that both honest pay *and* the honest redemption rate depend on.
 - [ ] **Tiered verification** — Standard (optimistic) now; Attested (TEE, also prompt privacy) as a premium lane; zkML as a research track.
 - [ ] **Vesting-bond sybil resistance** — no upfront stake; unvested earnings act as a slashable bond. Preserves no-barrier-to-entry.
