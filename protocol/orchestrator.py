@@ -11,9 +11,14 @@ The network brain. Responsibilities:
 Routing score (higher = better candidate):
   +20  exact model match
   + 1  "any" model fallback
-  +10  node has a GPU
-  + 8  per GB of VRAM (capped at 8)
   + 5  idle longest (round-robin tiebreaker, max 5pts)
+
+  Hardware (GPU / VRAM) is deliberately NOT scored: it is self-reported and
+  unverified, so rewarding or prioritizing it pays for an unprovable claim —
+  the same anti-pattern the verification work removed from `mock_verify`. A
+  node's real capability will instead come from measured, verified delivered
+  work (the deferred benchmark/tier system — see docs/VERIFICATION.md
+  build-now #3 and docs/VERIFICATION_PROTOCOL.md §1).
 
 Modes:
   Mock (default) — in-memory ledger, no blockchain required
@@ -129,13 +134,8 @@ def score_node(node: NodeConnection, model: str) -> int:
     else:
         score += 1
 
-    # GPU nodes are better for inference
-    if node.info.gpu:
-        score += 10
-
-    # More VRAM = can handle larger models
-    if node.info.vram_gb:
-        score += min(int(node.info.vram_gb), 8)
+    # Hardware (gpu / vram_gb) intentionally not scored — self-reported and
+    # unverified. See module docstring and docs/VERIFICATION.md build-now #3.
 
     # Round-robin tiebreaker: prefer the node that has been idle longest
     idle_seconds = time.time() - node.last_task_time
@@ -180,8 +180,6 @@ def find_best_node(
         parts.append("exact-model")
     else:
         parts.append("any-model")
-    if best_node.info.gpu:
-        parts.append("gpu")
     if len(candidates) > 1:
         parts.append(f"{len(candidates)}-candidates")
 
@@ -397,7 +395,6 @@ async def chat_completions(req: ChatRequest, _auth=Depends(_check_api_key)):
         node_id=primary_node.info.node_id,
         task_id=primary.task_id,
         output_tokens=primary.tokens_used,
-        had_gpu=primary_node.info.gpu,
     )
     log.info(
         f"Task done    id={primary.task_id}  node={primary_node.info.node_id}  "
@@ -410,7 +407,6 @@ async def chat_completions(req: ChatRequest, _auth=Depends(_check_api_key)):
                 chain_ledger.record_completion_onchain,
                 primary_node.info.wallet,
                 primary.tokens_used,
-                primary_node.info.gpu,
             )
         )
 

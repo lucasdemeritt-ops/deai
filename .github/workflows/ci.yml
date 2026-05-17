@@ -51,6 +51,7 @@ jobs:
           python -m py_compile protocol/orchestrator.py
           python -m py_compile protocol/verification.py
           python -m py_compile protocol/ledger.py
+          python -m py_compile protocol/chain_ledger.py
           python -m py_compile compute/node.py
           python -m py_compile shared/schemas.py
           python -m py_compile test_request.py
