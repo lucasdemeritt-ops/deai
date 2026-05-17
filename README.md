@@ -103,7 +103,10 @@ DeAI is a **Decentralized Physical Infrastructure Network (DePIN)** for AI infer
 - [x] **DeAI token contract** — ERC-20 token with mint/burn roles; written, tested (24/24 passing)
 - [x] **Payment contract** — escrow: user deposits tokens, released to miner on verified task completion; written, tested
 - [x] **Slashing contract** — miners who return bad results lose a portion of their staked tokens; written, tested
-- [ ] **Testnet deployment** — deploy and test all contracts on Sepolia/Amoy with free test tokens
+- [x] **Testnet deployment** — all three contracts live on Ethereum Sepolia
+  - DeAIToken: [`0x2bc0DBBe8617344e9132e659E87fEa62e050202d`](https://sepolia.etherscan.io/address/0x2bc0DBBe8617344e9132e659E87fEa62e050202d)
+  - PaymentContract: [`0x659b1de83Ccf3DFc3A534A80005336Ec2ED559B4`](https://sepolia.etherscan.io/address/0x659b1de83Ccf3DFc3A534A80005336Ec2ED559B4)
+  - SlashingContract: [`0x6B170247a67D1C0F354d253E3de18150a30F1fFb`](https://sepolia.etherscan.io/address/0x6B170247a67D1C0F354d253E3de18150a30F1fFb)
 - [ ] Replace in-memory ledger with on-chain calls
 - [ ] Node Client installer — one-click setup for Windows/Linux miners
 - [ ] Persistent Agent Runner — long-running agents funded by a token budget; pause and resume as balance allows

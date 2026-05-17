@@ -116,16 +116,30 @@ Nodes without a wallet still work — they're just not tracked on-chain and won'
 
 ---
 
-## Testnet deployment (Sepolia / Polygon Amoy)
+## Sepolia testnet (live deployment)
 
-Same steps, but:
-1. Get free test tokens from a faucet (search "Sepolia faucet" or "Amoy faucet")
-2. Get a free RPC endpoint from [Alchemy](https://www.alchemy.com) or [Infura](https://www.infura.io)
-3. Fill in `chain/.env` (separate from root `.env`) with your testnet RPC URL and deployer key
+The contracts are already deployed on Ethereum Sepolia — you can point directly at them:
+
+| Contract | Address |
+|---|---|
+| DeAIToken | [`0x2bc0DBBe8617344e9132e659E87fEa62e050202d`](https://sepolia.etherscan.io/address/0x2bc0DBBe8617344e9132e659E87fEa62e050202d) |
+| PaymentContract | [`0x659b1de83Ccf3DFc3A534A80005336Ec2ED559B4`](https://sepolia.etherscan.io/address/0x659b1de83Ccf3DFc3A534A80005336Ec2ED559B4) |
+| SlashingContract | [`0x6B170247a67D1C0F354d253E3de18150a30F1fFb`](https://sepolia.etherscan.io/address/0x6B170247a67D1C0F354d253E3de18150a30F1fFb) |
+
+To run against the live testnet deployment, use the public Sepolia RPC (no account needed):
+
+```env
+DEAI_RPC_URL=https://ethereum-sepolia.publicnode.com
+DEAI_SLASHING_CONTRACT=0x6B170247a67D1C0F354d253E3de18150a30F1fFb
+DEAI_PAYMENT_CONTRACT=0x659b1de83Ccf3DFc3A534A80005336Ec2ED559B4
+DEAI_TOKEN_CONTRACT=0x2bc0DBBe8617344e9132e659E87fEa62e050202d
+```
+
+To deploy your own instance (e.g. for testing contract changes):
+1. Get free Sepolia ETH from `https://sepolia-faucet.pk910.de` (no account needed — mines in browser)
+2. Generate a wallet: `node --input-type=module -e "import { ethers } from 'ethers'; const w = ethers.Wallet.createRandom(); console.log(w.address, w.privateKey);"`
+3. Fill in `chain/.env` with your RPC URL and deployer key
 4. Deploy: `npx hardhat run scripts/deploy.js --network sepolia`
-5. Run orchestrator pointing at Sepolia: `--rpc-url https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY`
-
-See `chain/.env.example` for all chain-specific variables.
 
 ---
 
