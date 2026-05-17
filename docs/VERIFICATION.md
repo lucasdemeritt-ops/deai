@@ -59,6 +59,10 @@ Rationale:
 
 ## Optimistic protocol sketch (Stage 0–1)
 
+> Fully specified in **[VERIFICATION_PROTOCOL.md](VERIFICATION_PROTOCOL.md)**
+> (state machine, parameter register, threat model, and a live code⇄spec
+> conformance ledger). The sketch below is the summary.
+
 1. Accept output O from node A by default; reward accrues but is not finalized.
 2. With probability *p*, silently re-dispatch (P, pinned model, fixed decoding)
    to a different randomly chosen node B (optionally a trusted reference node).
@@ -81,10 +85,13 @@ verification to the economics workstream), and choice of comparison method.
 
 All design / local-mock work, none blocked on testing:
 
-1. Spec the optimistic protocol fully (p, comparison method, escalation/slash
-   flow, the reference-inference-stack requirement per model).
-2. Replace `mock_verify` with a real `Verifier` interface; put a
-   redundant-execution verifier behind it; test locally with two mock nodes.
+1. ✅ **Done.** Optimistic protocol fully specced (p, comparison method,
+   escalation/slash flow, reference-inference-stack requirement) in
+   [VERIFICATION_PROTOCOL.md](VERIFICATION_PROTOCOL.md).
+2. ✅ **Done (seam).** `mock_verify` replaced with a real `Verifier` interface;
+   redundant-execution verifier behind it; tested locally with two mock nodes.
+   Remaining sub-work (committee, reference stack, final comparator, settlement)
+   tracked in VERIFICATION_PROTOCOL.md §8.
 3. Stop paying the GPU bonus on unverified self-reported hardware; fold
    hardware into the tier/benchmark system.
 4. Switch rewards to off-chain accrual + claimable batch settlement (Merkle
