@@ -30,7 +30,7 @@ from pathlib import Path
 
 from web3 import Web3
 
-from ledger import Ledger, BASE_REWARD, GPU_BONUS, TOKEN_PER_OUTPUT
+from ledger import Ledger, BASE_REWARD, TOKEN_PER_OUTPUT
 
 log = logging.getLogger("chain_ledger")
 
@@ -45,9 +45,10 @@ def _load_abi(name: str) -> list:
         return json.load(f)
 
 
-def _reward_wei(output_tokens: int, had_gpu: bool) -> int:
-    """Convert ledger reward formula to wei for on-chain minting."""
-    deai = BASE_REWARD + (GPU_BONUS if had_gpu else 0) + TOKEN_PER_OUTPUT * output_tokens
+def _reward_wei(output_tokens: int) -> int:
+    """Convert ledger reward formula to wei for on-chain minting. Must match
+    ledger.record_completion exactly so on-chain and in-memory agree."""
+    deai = BASE_REWARD + TOKEN_PER_OUTPUT * output_tokens
     return int(deai * _WEI)
 
 
@@ -121,7 +122,7 @@ class ChainLedger(Ledger):
         tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
         return self.w3.to_hex(tx_hash)
 
-    def record_completion_onchain(self, wallet: str, output_tokens: int, had_gpu: bool) -> str:
+    def record_completion_onchain(self, wallet: str, output_tokens: int) -> str:
         """
         Mints DEAI reward tokens to the miner's wallet and records the
         completion on SlashingContract.
@@ -134,7 +135,7 @@ class ChainLedger(Ledger):
         """
         try:
             addr = Web3.to_checksum_address(wallet)
-            reward = _reward_wei(output_tokens, had_gpu)
+            reward = _reward_wei(output_tokens)
 
             tx1 = self._send_tx(self.token.functions.mint(addr, reward))
             log.info(f"mint              wallet={wallet[:10]}...  deai={reward/_WEI:.2f}  tx={tx1[:18]}...")

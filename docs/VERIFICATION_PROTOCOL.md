@@ -250,6 +250,9 @@ What `protocol/verification.py` + `protocol/orchestrator.py` implement **today**
 - ❌ Off-chain accrual + claimable vested settlement (build-now #4; today the
   ledger credits immediately, not bonded/vested per ECONOMICS.md §4).
 - ❌ Conditioned/adaptive `p`; final comparison method.
+- ✅ Self-reported hardware (GPU/VRAM) removed from pay and routing score
+  (build-now #3, the verifiable half). The *measured* benchmark/tier
+  replacement (§1, §7) remains ❌ deferred.
 
 Any change to either file must update this section in the same commit.
 

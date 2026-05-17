@@ -92,8 +92,13 @@ All design / local-mock work, none blocked on testing:
    redundant-execution verifier behind it; tested locally with two mock nodes.
    Remaining sub-work (committee, reference stack, final comparator, settlement)
    tracked in VERIFICATION_PROTOCOL.md §8.
-3. Stop paying the GPU bonus on unverified self-reported hardware; fold
-   hardware into the tier/benchmark system.
+3. ✅ **Done (the verifiable half).** GPU bonus removed from pay (`ledger.py`
+   + `chain_ledger.py`) and from routing score (`orchestrator.score_node`) —
+   self-reported hardware no longer earns or prioritizes; unit-tested.
+   **Deferred:** folding hardware into a *measured* benchmark/tier system —
+   it depends on the per-model reference stack
+   ([VERIFICATION_PROTOCOL.md](VERIFICATION_PROTOCOL.md) §1) and is the
+   substrate for difficulty/load-aware scheduling (README Phase 4).
 4. Switch rewards to off-chain accrual + claimable batch settlement (Merkle
    distributor pattern) — removes per-task on-chain mint, decouples from chain
    choice, kills a whole exploit/gas class. Buildable in mock mode.

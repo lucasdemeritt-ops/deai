@@ -144,7 +144,7 @@ One-line summary of the sequencing: **trustworthy work-measurement is the keysto
 
 ### Phase 1 — Feasibility ✓
 - [x] Task orchestration — request routing from API to nodes over WebSocket
-- [x] Multi-node routing — scored dispatch (model match, GPU, round-robin fairness)
+- [x] Multi-node routing — scored dispatch (model match + round-robin fairness; self-reported hardware deliberately not scored — see Phase 3 / VERIFICATION.md build-now #3)
 - [x] Earnings ledger — nodes earn tokens per completed task (in-memory placeholder)
 - [x] Real inference — Ollama integration, local models serving actual responses
 - [x] Security principles — documented non-negotiable rules for privacy and safety
@@ -188,6 +188,8 @@ The contribution staircase begins (VISION.md Stage 1) alongside openness work.
 - [ ] **Cloud bridge nodes** — contribute existing provider subscription capacity; the provider bills the miner directly.
 - [ ] **Relay layer** — hide node IPs from the orchestrator (SECURITY.md Rule 6); turns Rules 1 & 3 from policy into architecture.
 - [ ] **Model marketplace** — community-published model registry; any model, any hardware tier.
+- [ ] **Capability tiers from measured work** — the deferred half of VERIFICATION.md build-now #3: replace removed self-reported-hardware scoring with a tier derived from *verified delivered* throughput. This same measured-capability substrate is the prerequisite for the next item.
+- [ ] **Difficulty- & load-aware scheduling** — estimate a task's compute weight and, under load, route light requests to lower-tier nodes so heavy nodes stay free for heavy work. Net effect at scale: higher throughput and weak nodes stay useful instead of starved. Depends on the measured-capability tier above; the weight estimate is itself imperfect (the main open tradeoff). Not started — captured here so it isn't lost.
 
 ### Phase 5 — Mainnet Graduation
 

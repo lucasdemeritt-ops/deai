@@ -3,13 +3,19 @@ DeAI Earnings Ledger
 --------------------
 Tracks token balances and earnings history for every node.
 
-Token economy (Phase 1 — flat rate, tunable):
+Token economy (interim — flat rate, tunable):
   BASE_REWARD      = 10 tokens per completed task
-  GPU_BONUS        = +5 tokens if the node has a GPU
-  TOKEN_PER_TOKEN  = +0.01 tokens per output token generated
+  TOKEN_PER_OUTPUT = +0.01 tokens per output token generated
 
-Phase 2 will replace this with on-chain smart contracts.
-The ledger interface stays the same — only the backend changes.
+Hardware (GPU/VRAM) is intentionally NOT rewarded. It is self-reported by
+the node and unverified, so paying for it rewards an unprovable claim — the
+same anti-pattern removed from mock_verify. Real capability will instead come
+from measured, verified delivered work (the deferred benchmark/tier system —
+see docs/VERIFICATION.md build-now #3 and docs/VERIFICATION_PROTOCOL.md §1).
+
+Honest scoping note: `output_tokens` is itself a node self-report and is not
+verified yet either. That is a work-claim (not a hardware-claim), tracked
+separately, and deliberately out of scope for this change.
 """
 
 import time
@@ -20,7 +26,6 @@ from typing import Dict, List
 # ── Reward constants (easy to tune) ──────────────────────────────────────────
 
 BASE_REWARD = 10.0        # tokens per completed task
-GPU_BONUS = 5.0           # extra tokens for GPU nodes
 TOKEN_PER_OUTPUT = 0.01   # tokens per output token generated
 
 
@@ -29,7 +34,6 @@ class EarningEvent:
     task_id: str
     tokens_earned: float
     output_tokens: int
-    had_gpu: bool
     timestamp: float = field(default_factory=time.time)
 
 
@@ -64,17 +68,14 @@ class Ledger:
             self._balances[node_id] = NodeBalance(node_id=node_id)
         return self._balances[node_id]
 
-    def record_completion(self, node_id: str, task_id: str, output_tokens: int, had_gpu: bool) -> float:
+    def record_completion(self, node_id: str, task_id: str, output_tokens: int) -> float:
         """Calculate and record earnings for a completed task. Returns tokens earned."""
-        earned = BASE_REWARD
-        earned += GPU_BONUS if had_gpu else 0.0
-        earned += output_tokens * TOKEN_PER_OUTPUT
+        earned = BASE_REWARD + output_tokens * TOKEN_PER_OUTPUT
 
         event = EarningEvent(
             task_id=task_id,
             tokens_earned=earned,
             output_tokens=output_tokens,
-            had_gpu=had_gpu,
         )
         self._ensure(node_id).record(event)
         return earned
