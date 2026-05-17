@@ -103,12 +103,12 @@ describe("DeAI Contract Suite", function () {
       expect(record.ejected).to.equal(false);
     });
 
-    it("reports miner as eligible after staking MIN_STAKE", async function () {
+    it("is eligible after staking", async function () {
       expect(await slashing.isEligible(miner.address)).to.equal(true);
     });
 
-    it("reports miner as ineligible before staking", async function () {
-      expect(await slashing.isEligible(miner2.address)).to.equal(false);
+    it("is eligible even without stake — no barrier to entry", async function () {
+      expect(await slashing.isEligible(miner2.address)).to.equal(true);
     });
 
     it("recordCompletion increments tasksCompleted", async function () {
@@ -131,6 +131,14 @@ describe("DeAI Contract Suite", function () {
       }
       const record = await slashing.miners(miner.address);
       expect(record.ejected).to.equal(true);
+    });
+
+    it("slash ejects a zero-stake miner on first offense", async function () {
+      // miner2 has no stake at all
+      await slashing.connect(orchestrator).slash(miner2.address);
+      const record = await slashing.miners(miner2.address);
+      expect(record.ejected).to.equal(true);
+      expect(record.timesSlashed).to.equal(1n);
     });
 
     it("ejected miner cannot rejoin by staking again", async function () {

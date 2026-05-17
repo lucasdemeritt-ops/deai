@@ -122,17 +122,17 @@ The contracts are already deployed on Ethereum Sepolia — you can point directl
 
 | Contract | Address |
 |---|---|
-| DeAIToken | [`0x2bc0DBBe8617344e9132e659E87fEa62e050202d`](https://sepolia.etherscan.io/address/0x2bc0DBBe8617344e9132e659E87fEa62e050202d) |
-| PaymentContract | [`0x659b1de83Ccf3DFc3A534A80005336Ec2ED559B4`](https://sepolia.etherscan.io/address/0x659b1de83Ccf3DFc3A534A80005336Ec2ED559B4) |
-| SlashingContract | [`0x6B170247a67D1C0F354d253E3de18150a30F1fFb`](https://sepolia.etherscan.io/address/0x6B170247a67D1C0F354d253E3de18150a30F1fFb) |
+| DeAIToken | [`0x3d05b005b925a5d88af8eDf499659334aA1cB628`](https://sepolia.etherscan.io/address/0x3d05b005b925a5d88af8eDf499659334aA1cB628) |
+| PaymentContract | [`0x54319c2640C725bAD3012937Dfd5b71068d1eb3B`](https://sepolia.etherscan.io/address/0x54319c2640C725bAD3012937Dfd5b71068d1eb3B) |
+| SlashingContract | [`0x91533badB0e79A40097D49BD36E9B84B2d0c53b7`](https://sepolia.etherscan.io/address/0x91533badB0e79A40097D49BD36E9B84B2d0c53b7) |
 
 To run against the live testnet deployment, use the public Sepolia RPC (no account needed):
 
 ```env
 DEAI_RPC_URL=https://ethereum-sepolia.publicnode.com
-DEAI_SLASHING_CONTRACT=0x6B170247a67D1C0F354d253E3de18150a30F1fFb
-DEAI_PAYMENT_CONTRACT=0x659b1de83Ccf3DFc3A534A80005336Ec2ED559B4
-DEAI_TOKEN_CONTRACT=0x2bc0DBBe8617344e9132e659E87fEa62e050202d
+DEAI_SLASHING_CONTRACT=0x91533badB0e79A40097D49BD36E9B84B2d0c53b7
+DEAI_PAYMENT_CONTRACT=0x54319c2640C725bAD3012937Dfd5b71068d1eb3B
+DEAI_TOKEN_CONTRACT=0x3d05b005b925a5d88af8eDf499659334aA1cB628
 ```
 
 To deploy your own instance (e.g. for testing contract changes):

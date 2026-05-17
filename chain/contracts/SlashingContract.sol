@@ -9,28 +9,30 @@ import "./DeAIToken.sol";
  * @title SlashingContract
  * @notice Stake and reputation management for DeAI network miners.
  *
- * Miners stake tokens when they join the network. Stake acts as a
- * security deposit — if a miner returns a bad result, they lose a
- * portion of their stake (slashing). Repeated bad behavior can result
- * in full ejection from the network.
+ * Anyone can join and start earning — no stake required to participate.
+ * Stake is optional but acts as a protection buffer: miners with stake
+ * can absorb bad results without being ejected. Miners with no stake
+ * are ejected on their first verified bad result.
  *
- * This creates a strong economic incentive for miners to serve
- * honest, high-quality inference results.
+ * This design removes the bootstrap barrier (no chicken-and-egg token
+ * problem) while keeping the economic incentive to stake strong:
+ * stake protects your ability to keep earning.
  *
- * Slash amounts:
- *   SLASH_AMOUNT  — tokens burned per verified bad result
- *   MIN_STAKE     — minimum stake to remain in good standing
+ * MIN_STAKE  — floor kept in contract when withdrawing (voluntary buffer)
+ * SLASH_AMOUNT — tokens burned per verified bad result
  *
- * Below MIN_STAKE, a miner is flagged as ineligible and the orchestrator
- * will not route tasks to them until they top up their stake.
+ * Slash tiers:
+ *   stake >= SLASH_AMOUNT  → burn SLASH_AMOUNT, continue
+ *   0 < stake < SLASH_AMOUNT → burn remaining stake, eject
+ *   stake == 0             → eject immediately (one strike, no buffer)
  */
 contract SlashingContract is AccessControl, ReentrancyGuard {
     bytes32 public constant ORCHESTRATOR_ROLE = keccak256("ORCHESTRATOR_ROLE");
 
     DeAIToken public immutable token;
 
-    uint256 public constant MIN_STAKE    = 100 * 1e18;   // 100 DEAI to participate
-    uint256 public constant SLASH_AMOUNT = 10  * 1e18;   // 10 DEAI burned per offense
+    uint256 public constant MIN_STAKE    = 100 * 1e18;  // voluntary buffer floor
+    uint256 public constant SLASH_AMOUNT = 10  * 1e18;  // burned per bad result
 
     struct MinerRecord {
         uint256 stake;
@@ -54,8 +56,9 @@ contract SlashingContract is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @notice Miner deposits stake to join the network.
-     *         Must stake at least MIN_STAKE to be eligible for tasks.
+     * @notice Miner deposits stake as a protection buffer.
+     *         Stake is optional — miners can earn without it, but any
+     *         bad result will eject them immediately if stake is zero.
      */
     function stake(uint256 amount) external nonReentrant {
         require(!miners[msg.sender].ejected, "Ejected miners cannot rejoin");
@@ -68,17 +71,16 @@ contract SlashingContract is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @notice Returns true if the miner is in good standing and eligible
-     *         to receive tasks from the orchestrator.
+     * @notice Returns true if the miner is eligible to receive tasks.
+     *         Any miner who has not been ejected is eligible — no stake required.
      */
     function isEligible(address miner) external view returns (bool) {
-        MinerRecord storage r = miners[miner];
-        return !r.ejected && r.stake >= MIN_STAKE;
+        return !miners[miner].ejected;
     }
 
     /**
      * @notice Called by orchestrator when a task is successfully verified.
-     *         Increments the miner's reputation score.
+     *         Increments the miner's on-chain reputation counter.
      */
     function recordCompletion(address miner) external onlyRole(ORCHESTRATOR_ROLE) {
         require(!miners[miner].ejected, "Miner is ejected");
@@ -88,33 +90,42 @@ contract SlashingContract is AccessControl, ReentrancyGuard {
 
     /**
      * @notice Called by orchestrator when a miner returns a bad result.
-     *         Burns SLASH_AMOUNT from their stake. If stake falls below
-     *         MIN_STAKE, miner is ejected from the network.
+     *
+     *   - If stake >= SLASH_AMOUNT: burn SLASH_AMOUNT, miner continues
+     *   - If 0 < stake < SLASH_AMOUNT: burn remainder, eject
+     *   - If stake == 0: eject immediately — no buffer means no second chance
      */
     function slash(address miner) external onlyRole(ORCHESTRATOR_ROLE) nonReentrant {
         MinerRecord storage r = miners[miner];
         require(!r.ejected, "Already ejected");
-        require(r.stake > 0, "No stake to slash");
+
+        r.timesSlashed += 1;
+
+        if (r.stake == 0) {
+            // No buffer — eject on first offense
+            r.ejected = true;
+            emit MinerSlashed(miner, 0, 0);
+            emit MinerEjected(miner);
+            return;
+        }
 
         uint256 slashAmt = r.stake >= SLASH_AMOUNT ? SLASH_AMOUNT : r.stake;
         r.stake -= slashAmt;
-        r.timesSlashed += 1;
 
-        // Burn the slashed tokens — they leave circulation permanently
+        // Burned tokens leave circulation permanently
         token.burn(address(this), slashAmt);
-
         emit MinerSlashed(miner, slashAmt, r.stake);
 
-        if (r.stake < MIN_STAKE) {
+        if (r.stake == 0) {
             r.ejected = true;
             emit MinerEjected(miner);
         }
     }
 
     /**
-     * @notice Miner withdraws their stake when leaving the network.
-     *         Only the amount above MIN_STAKE can be withdrawn while active.
-     *         Full withdrawal is allowed if the miner chooses to leave entirely.
+     * @notice Withdraw earned tokens above the MIN_STAKE buffer.
+     *         Keeping MIN_STAKE locked protects against 10 consecutive bad
+     *         results before ejection. Call exitNetwork() to withdraw everything.
      */
     function withdrawStake(uint256 amount) external nonReentrant {
         MinerRecord storage r = miners[msg.sender];
@@ -129,7 +140,8 @@ contract SlashingContract is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @notice Full exit — miner leaves the network and withdraws all stake.
+     * @notice Full exit — withdraw all stake and leave the network.
+     *         After exit the miner is ejected and cannot rejoin with this address.
      */
     function exitNetwork() external nonReentrant {
         MinerRecord storage r = miners[msg.sender];

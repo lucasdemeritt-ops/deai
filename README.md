@@ -104,9 +104,9 @@ DeAI is a **Decentralized Physical Infrastructure Network (DePIN)** for AI infer
 - [x] **Payment contract** — escrow: user deposits tokens, released to miner on verified task completion; written, tested
 - [x] **Slashing contract** — miners who return bad results lose a portion of their staked tokens; written, tested
 - [x] **Testnet deployment** — all three contracts live on Ethereum Sepolia
-  - DeAIToken: [`0x2bc0DBBe8617344e9132e659E87fEa62e050202d`](https://sepolia.etherscan.io/address/0x2bc0DBBe8617344e9132e659E87fEa62e050202d)
-  - PaymentContract: [`0x659b1de83Ccf3DFc3A534A80005336Ec2ED559B4`](https://sepolia.etherscan.io/address/0x659b1de83Ccf3DFc3A534A80005336Ec2ED559B4)
-  - SlashingContract: [`0x6B170247a67D1C0F354d253E3de18150a30F1fFb`](https://sepolia.etherscan.io/address/0x6B170247a67D1C0F354d253E3de18150a30F1fFb)
+  - DeAIToken: [`0x3d05b005b925a5d88af8eDf499659334aA1cB628`](https://sepolia.etherscan.io/address/0x3d05b005b925a5d88af8eDf499659334aA1cB628)
+  - PaymentContract: [`0x54319c2640C725bAD3012937Dfd5b71068d1eb3B`](https://sepolia.etherscan.io/address/0x54319c2640C725bAD3012937Dfd5b71068d1eb3B)
+  - SlashingContract: [`0x91533badB0e79A40097D49BD36E9B84B2d0c53b7`](https://sepolia.etherscan.io/address/0x91533badB0e79A40097D49BD36E9B84B2d0c53b7)
 - [ ] Replace in-memory ledger with on-chain calls
 - [ ] Node Client installer — one-click setup for Windows/Linux miners
 - [ ] Persistent Agent Runner — long-running agents funded by a token budget; pause and resume as balance allows
