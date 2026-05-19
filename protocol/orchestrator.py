@@ -47,6 +47,7 @@ import os
 from typing import Dict, Optional
 
 import uvicorn
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import JSONResponse
@@ -68,7 +69,22 @@ logging.basicConfig(
 )
 log = logging.getLogger("orchestrator")
 
-app = FastAPI(title="DeAI Orchestrator", version="0.1.0")
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    if chain_ledger is not None:
+        async def _loop():
+            while True:
+                await asyncio.sleep(_settle_interval)
+                try:
+                    await asyncio.to_thread(chain_ledger.settle_epoch)
+                except Exception as e:
+                    log.error(f"settlement loop error  err={e}")
+        asyncio.create_task(_loop())
+        log.info(f"Reward settlement loop started  interval={_settle_interval}s")
+    yield
+
+
+app = FastAPI(title="DeAI Orchestrator", version="0.1.0", lifespan=_lifespan)
 
 
 # ── State ─────────────────────────────────────────────────────────────────────
@@ -496,24 +512,6 @@ def claim(wallet: str):
 @app.get("/")
 def root():
     return {"service": "DeAI Orchestrator", "version": "0.1.0", "docs": "/docs", "status": "/status"}
-
-
-@app.on_event("startup")
-async def _start_settlement_loop():
-    """In chain mode, publish a cumulative Merkle root every settle interval."""
-    if chain_ledger is None:
-        return
-
-    async def _loop():
-        while True:
-            await asyncio.sleep(_settle_interval)
-            try:
-                await asyncio.to_thread(chain_ledger.settle_epoch)
-            except Exception as e:
-                log.error(f"settlement loop error  err={e}")
-
-    asyncio.create_task(_loop())
-    log.info(f"Reward settlement loop started  interval={_settle_interval}s")
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
