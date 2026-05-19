@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "mocha test/deai.test.js"
+    "test": "mocha test/deai.test.js",
+    "test:merkle": "mocha test/MerkleDistributor.test.js"
   },
   "keywords": [],
   "author": "",

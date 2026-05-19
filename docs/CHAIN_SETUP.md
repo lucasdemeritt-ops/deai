@@ -7,7 +7,7 @@ By default the orchestrator runs in **mock mode**: everything works with an in-m
 - The eligibility gate checks a miner has **not been ejected** before routing tasks to them — staking is optional, **not** required
 - Slashed tokens are permanently burned from circulation
 
-The PaymentContract (user deposit → escrow → release to miner) is **not** integrated at all — neither on-chain nor in-memory. In both mock and chain mode the live path simply mints a DEAI reward directly to the miner on task completion; there is no user payment or escrow. Full escrow integration needs user wallets and signing, and is deferred (roadmap Phase 3).
+The PaymentContract (user deposit → escrow → release to miner) is **not** integrated at all — neither on-chain nor in-memory. In chain mode the live path accrues rewards off-chain and settles them once per epoch as a cumulative Merkle root miners claim from `MerkleDistributor` (build-now #4 — no per-task mint, no hot mint key); in mock mode it is in-memory only. Either way there is no user payment or escrow — rewards are minted into existence, not funded by a paying user. Full escrow integration needs user wallets and signing, and is deferred (roadmap Phase 3).
 
 ---
 
@@ -66,6 +66,9 @@ DEAI_RPC_URL=http://localhost:8545
 DEAI_SLASHING_CONTRACT=0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0
 DEAI_PAYMENT_CONTRACT=0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512
 DEAI_TOKEN_CONTRACT=0x5FbDB2315678afecb367f032d93F642f64180aa3
+DEAI_DISTRIBUTOR_CONTRACT=0x<MerkleDistributor address from deploy.js output>
+# Optional: seconds between reward-settlement epochs (default 3600)
+# DEAI_SETTLE_INTERVAL=3600
 
 # First Hardhat test account private key (pre-funded, safe for local dev only)
 DEAI_ORCHESTRATOR_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
@@ -84,16 +87,24 @@ Or pass everything as flags instead of env vars:
 ```bash
 python protocol/orchestrator.py --chain \
   --rpc-url http://localhost:8545 \
-  --slashing-contract 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0 \
-  --payment-contract  0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512 \
-  --orchestrator-key  0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+  --token-contract       0x5FbDB2315678afecb367f032d93F642f64180aa3 \
+  --slashing-contract    0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0 \
+  --payment-contract     0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512 \
+  --distributor-contract 0x<MerkleDistributor address> \
+  --orchestrator-key     0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 ```
 
 You should see:
 ```
-ChainLedger ready  rpc=http://localhost:8545  orchestrator=0xf39F...
-Running in ON-CHAIN mode — SlashingContract wired
+ChainLedger ready  rpc=http://localhost:8545  orchestrator=0xf39F...  distributor=0x...
+Running in ON-CHAIN mode — rewards accrue off-chain, settled every 3600s via MerkleDistributor
+Reward settlement loop started  interval=3600s
 ```
+
+Rewards no longer mint per task. They accrue off-chain; every epoch the
+orchestrator publishes one cumulative Merkle root. A miner fetches their
+proof from `GET /claim/<wallet>` and calls `MerkleDistributor.claim()`
+themselves.
 
 ---
 
@@ -151,7 +162,8 @@ To deploy your own instance (e.g. for testing contract changes):
 |---|---|---|
 | Ledger | In-memory, resets on restart | SlashingContract on-chain, persistent |
 | Eligibility check | All nodes eligible | Any miner not ejected is eligible — stake is optional, **not** required |
-| Task completion | Increments in-memory counter | Also calls `recordCompletion()` on-chain |
+| Task completion | Increments in-memory counter | Accrues reward off-chain + calls `recordCompletion()` on-chain |
+| Reward settlement | In-memory balance only | Off-chain accrual → cumulative Merkle root per epoch via `MerkleDistributor`; miners claim (`GET /claim/<wallet>` → `claim()`) |
 | Bad results | Logged, no penalty | Calls `slash()` — burns up to 10 DEAI from stake; a miner with no stake is ejected on the first bad result |
-| Payment / escrow | Not implemented (direct mint only) | Not implemented (direct mint only — PaymentContract not wired; deferred) |
+| Payment / escrow | Not implemented (rewards minted, not user-funded) | Not implemented (PaymentContract not wired; deferred) |
 | Requires blockchain | No | Yes |

@@ -24,11 +24,14 @@ Modes:
   Mock (default) — in-memory ledger, no blockchain required
     python protocol/orchestrator.py
 
-  On-chain — real SlashingContract calls for reputation + eligibility
+  On-chain — rewards accrue off-chain, settled per epoch via a Merkle
+  root; SlashingContract for reputation + eligibility
     python protocol/orchestrator.py --chain \\
         --rpc-url http://localhost:8545 \\
+        --token-contract 0x... \\
         --slashing-contract 0x... \\
         --payment-contract 0x... \\
+        --distributor-contract 0x... \\
         --orchestrator-key 0x...
 
   See docs/CHAIN_SETUP.md for full on-chain setup instructions.
@@ -72,6 +75,9 @@ app = FastAPI(title="DeAI Orchestrator", version="0.1.0")
 
 # Set at startup from CLI args — None means mock/dev mode
 chain_ledger = None
+
+# Reward-settlement epoch length (seconds). Chain mode only.
+_settle_interval = 3600
 
 # Optional API key — None means open access (fine for local dev)
 _api_key: Optional[str] = None
@@ -471,9 +477,43 @@ def node_earnings(node_id: str):
     return ledger.summary(node_id)
 
 
+@app.get("/claim/{wallet}")
+def claim(wallet: str):
+    """
+    Reward settlement is claim-based (build-now #4). A miner fetches their
+    cumulative amount + Merkle proof here, then calls MerkleDistributor.claim
+    themselves. 404 in mock mode or before this wallet appears in a settled
+    root.
+    """
+    if chain_ledger is None:
+        raise HTTPException(status_code=404, detail="Not in chain mode — no on-chain settlement.")
+    info = chain_ledger.claim_info(wallet)
+    if info is None:
+        raise HTTPException(status_code=404, detail="No settled rewards for this wallet yet.")
+    return info
+
+
 @app.get("/")
 def root():
     return {"service": "DeAI Orchestrator", "version": "0.1.0", "docs": "/docs", "status": "/status"}
+
+
+@app.on_event("startup")
+async def _start_settlement_loop():
+    """In chain mode, publish a cumulative Merkle root every settle interval."""
+    if chain_ledger is None:
+        return
+
+    async def _loop():
+        while True:
+            await asyncio.sleep(_settle_interval)
+            try:
+                await asyncio.to_thread(chain_ledger.settle_epoch)
+            except Exception as e:
+                log.error(f"settlement loop error  err={e}")
+
+    asyncio.create_task(_loop())
+    log.info(f"Reward settlement loop started  interval={_settle_interval}s")
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
@@ -501,9 +541,17 @@ if __name__ == "__main__":
     parser.add_argument("--payment-contract",
                         default=os.getenv("DEAI_PAYMENT_CONTRACT"),
                         help="Deployed PaymentContract address")
+    parser.add_argument("--distributor-contract",
+                        default=os.getenv("DEAI_DISTRIBUTOR_CONTRACT"),
+                        help="Deployed MerkleDistributor address (reward settlement)")
     parser.add_argument("--orchestrator-key",
                         default=os.getenv("DEAI_ORCHESTRATOR_KEY"),
-                        help="Orchestrator wallet private key (needs MINTER_ROLE + ORCHESTRATOR_ROLE)")
+                        help="Orchestrator wallet private key (needs UPDATER_ROLE on "
+                             "MerkleDistributor + ORCHESTRATOR_ROLE on SlashingContract)")
+    parser.add_argument("--settle-interval", type=int,
+                        default=int(os.getenv("DEAI_SETTLE_INTERVAL", "3600")),
+                        help="Seconds between reward-settlement epochs (publish a "
+                             "cumulative Merkle root). Chain mode only. Default 3600.")
 
     # Verification (Standard tier — docs/VERIFICATION.md)
     parser.add_argument("--verify-sample-rate", type=float,
@@ -535,10 +583,11 @@ if __name__ == "__main__":
 
     if args.chain:
         missing = [n for n, v in [
-            ("--token-contract",    args.token_contract),
-            ("--slashing-contract", args.slashing_contract),
-            ("--payment-contract",  args.payment_contract),
-            ("--orchestrator-key",  args.orchestrator_key),
+            ("--token-contract",       args.token_contract),
+            ("--slashing-contract",    args.slashing_contract),
+            ("--payment-contract",     args.payment_contract),
+            ("--distributor-contract", args.distributor_contract),
+            ("--orchestrator-key",     args.orchestrator_key),
         ] if not v]
         if missing:
             parser.error(f"--chain requires: {', '.join(missing)}")
@@ -550,8 +599,13 @@ if __name__ == "__main__":
             token_addr=args.token_contract,
             slashing_addr=args.slashing_contract,
             payment_addr=args.payment_contract,
+            distributor_addr=args.distributor_contract,
         )
-        log.info("Running in ON-CHAIN mode — SlashingContract wired")
+        _settle_interval = args.settle_interval
+        log.info(
+            f"Running in ON-CHAIN mode — rewards accrue off-chain, settled "
+            f"every {args.settle_interval}s via MerkleDistributor"
+        )
     else:
         log.info("Running in MOCK mode — in-memory ledger only (no blockchain required)")
 

@@ -209,6 +209,10 @@ framework now; numbers are empirical, tuned on testnet.
 ## 6. Admin-key sunset & governance
 
 - **Testnet:** admin key held (disclosed in SECURITY.md).
+- **Per-task hot mint key removed** (build-now #4): the orchestrator no
+  longer holds token `MINTER_ROLE`. Rewards accrue off-chain and settle via
+  `MerkleDistributor`, which mints only what a published cumulative root
+  authorizes. This shrinks the always-hot attack surface ahead of the sunset.
 - **Before any valued/transferable token:** mint authority → multisig +
   timelock. No valued token launches with a unilateral mint key.
 - **Later:** on-chain governance. Token-weighted trends to plutocracy;

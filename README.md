@@ -104,14 +104,13 @@ DeAI is a **Decentralized Physical Infrastructure Network (DePIN)** for AI infer
 
 ### Centralization trade-off (current state)
 
-The compute layer is fully decentralized — anyone can run a miner node and earn tokens. The orchestrator, however, is currently a single trusted node run by the core team. It holds `MINTER_ROLE` on the token contract and signs all reward transactions, meaning task routing and token issuance are centralized for now. This is a deliberate bootstrapping trade-off, not a permanent design.
+The compute layer is fully decentralized — anyone can run a miner node and earn tokens. The orchestrator, however, is currently a single trusted node run by the core team: it routes all tasks and is the only wallet allowed to publish reward roots (`UPDATER_ROLE` on `MerkleDistributor`). It no longer holds the token `MINTER_ROLE` — rewards accrue off-chain and the distributor mints only what a published cumulative root authorizes, so there is no permanently-hot mint key. Task routing and reward-root authority are still centralized for now; this is a deliberate bootstrapping trade-off, not a permanent design.
 
 Decentralizing the orchestrator is a Phase 3 priority. In the meantime, if you want to run your own independent orchestrator:
 
-1. Deploy fresh contracts: `npx hardhat run scripts/deploy.js --network sepolia`
-2. Grant your orchestrator wallet `MINTER_ROLE` on your DeAIToken deployment
-3. Start with: `python protocol/orchestrator.py --chain --token-contract 0x... --slashing-contract 0x... --orchestrator-key 0x...`
-4. Point your miners at your orchestrator URL instead of the default
+1. Deploy fresh contracts: `npx hardhat run scripts/deploy.js --network sepolia` (this also deploys `MerkleDistributor` and wires all roles for you)
+2. Start with: `python protocol/orchestrator.py --chain --token-contract 0x... --slashing-contract 0x... --payment-contract 0x... --distributor-contract 0x... --orchestrator-key 0x...`
+3. Point your miners at your orchestrator URL instead of the default
 
 Your orchestrator and the core team's run independently — miners choose which one to connect to.
 
@@ -120,7 +119,7 @@ Your orchestrator and the core team's run independently — miners choose which 
 The sections above describe the target system. Several core pieces are deliberately still placeholders, and we'd rather state that than imply protections that aren't there yet:
 
 - **Verification is early.** The old `mock_verify` is gone — replaced by a pluggable `Verifier` seam (`protocol/verification.py`). The default `ContentVerifier` still only checks for non-empty content (legacy behaviour, so nothing changes unless opted in). An optimistic `RedundantExecutionVerifier` exists and is unit-tested: with a sampling rate it silently re-runs a task on a second node and compares. It is **off by default** and still incomplete — committee escalation is not built (a two-sample mismatch is rejected but no node is auto-slashed, deliberately, to avoid false-positive slashing of honest providers), the comparison method is a labelled placeholder pending empirical work, and the per-model reference inference stack does not exist yet. So real Proof-of-Useful-Inference is in progress, not done.
-- **No escrow in the live path.** `PaymentContract` (user deposit → escrow → release to miner) is written and unit-tested, but it is *not* wired into the running orchestrator. The live reward path mints DEAI directly to the miner on task completion — there is no user payment or escrow today.
+- **No escrow in the live path.** `PaymentContract` (user deposit → escrow → release to miner) is written and unit-tested, but it is *not* wired into the running orchestrator. The live reward path accrues earnings off-chain and settles them as a cumulative Merkle root miners claim from `MerkleDistributor` (no per-task mint) — but there is still no *user payment or escrow*: rewards are minted into existence, not funded by a paying user.
 - **DEAI has no monetary value.** The contracts are deployed only on the Ethereum Sepolia *testnet*. Sepolia DEAI is a valueless test token used to prove the mechanics. Nothing here is real money.
 - **The chain is an open question.** Sepolia is for testing only. Whether DeAI ultimately runs on an existing chain or its own sovereign chain is an explicitly undecided, deferred decision — not committed in either direction.
 
@@ -159,7 +158,7 @@ One-line summary of the sequencing: **trustworthy work-measurement is the keysto
   - DeAIToken: [`0xE513DAb60018fc63bDB240605CE0816dE7751B27`](https://sepolia.etherscan.io/address/0xE513DAb60018fc63bDB240605CE0816dE7751B27)
   - PaymentContract: [`0x49F2ed162B5DEba2b768BFD79313FADdF3c075C8`](https://sepolia.etherscan.io/address/0x49F2ed162B5DEba2b768BFD79313FADdF3c075C8)
   - SlashingContract: [`0xDFea0F4436E3B30D2861D7b7Acf6c252Da28633c`](https://sepolia.etherscan.io/address/0xDFea0F4436E3B30D2861D7b7Acf6c252Da28633c)
-- [x] **On-chain rewards** — orchestrator mints DEAI test tokens to miner wallets on task completion (Sepolia testnet — no monetary value)
+- [x] **On-chain rewards** — ~~orchestrator mints DEAI per task~~ → superseded by claim-based batch settlement: rewards accrue off-chain and are settled once per epoch as a cumulative Merkle root miners claim from `MerkleDistributor` (no per-task mint, no hot mint key). `MerkleDistributor` is new in build-now #4 and not part of the original three Sepolia deployments above — redeploy via `scripts/deploy.js` to use it.
 - [x] **Node Client installer** — one-click setup scripts for Windows (`install_node.ps1`) and Linux/macOS (`install_node.sh`)
 - [x] **Marketplace API** — OpenAI-compatible endpoint with optional API key auth (`--api-key`)
 - [x] **Persistent Agent Runner** — `application/agent_runner.py`; runs on a token budget, pauses when exhausted, resumes on top-up
@@ -176,7 +175,7 @@ Nothing below ships with real value until this phase is proven. All of it runs o
 - [ ] **Vesting-bond sybil resistance** — no upfront stake; unvested earnings act as a slashable bond. Preserves no-barrier-to-entry.
 - [ ] **Redemption-anchored economics** — DEAI redeemable for inference at a transparently determined rate; stablecoin/fiat on-ramps; burn sinks.
 - [ ] **The immutable self-check** — open on-chain rule, tamper-evident inputs, publicly recomputable, rule changes only via a pre-announced timelocked path. (Expected to take more than one iteration — see ECONOMICS.md.)
-- [ ] **Decentralize the orchestrator** — remove the single-trusted-node and `MINTER_ROLE` centralization.
+- [ ] **Decentralize the orchestrator** — remove the single-trusted-node routing and reward-root (`UPDATER_ROLE`) authority. (The hot token `MINTER_ROLE` is already gone — build-now #4.)
 
 ### Phase 4 — Collaborative Compute & Scale
 
