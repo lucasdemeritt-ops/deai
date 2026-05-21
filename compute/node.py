@@ -271,6 +271,7 @@ def parse_args():
     parser.add_argument("--ollama-url", default="http://localhost:11434", help="Ollama API URL")
     parser.add_argument("--auto", action="store_true", help="Auto-detect installed Ollama models and advertise them")
     parser.add_argument("--wallet", default=os.getenv("DEAI_WALLET"), help="EVM wallet address for on-chain rewards (optional in mock mode)")
+    parser.add_argument("--project", default=os.getenv("DEAI_PROJECT"), help="Dedicate this node to a specific project (only receives tasks tagged with this project)")
     return parser.parse_args()
 
 
@@ -306,6 +307,7 @@ if __name__ == "__main__":
             vram_gb=args.vram,
             ram_gb=args.ram,
             wallet=args.wallet or None,
+            project=args.project or None,
         )
 
         await run_node(

@@ -8,9 +8,9 @@ from types import SimpleNamespace
 import orchestrator
 
 
-def _node(models, gpu=False, vram_gb=None, last_task_time=0.0):
+def _node(models, gpu=False, vram_gb=None, last_task_time=0.0, project=None):
     return SimpleNamespace(
-        info=SimpleNamespace(models=models, gpu=gpu, vram_gb=vram_gb),
+        info=SimpleNamespace(models=models, gpu=gpu, vram_gb=vram_gb, project=project),
         last_task_time=last_task_time,
     )
 
@@ -36,3 +36,33 @@ def test_vram_does_not_change_score():
     lo = _node(["any"], gpu=True, vram_gb=4, last_task_time=0.0)
     hi = _node(["any"], gpu=True, vram_gb=80, last_task_time=0.0)
     assert orchestrator.score_node(lo, "llama3") == orchestrator.score_node(hi, "llama3")
+
+
+# ── Dedicated mining ──────────────────────────────────────────────────────────
+
+def test_dedicated_node_rejected_for_wrong_project():
+    n = _node(["any"], project="acme")
+    assert orchestrator.score_node(n, "any", project="other") == -1
+
+
+def test_dedicated_node_rejected_for_untagged_task():
+    n = _node(["any"], project="acme")
+    assert orchestrator.score_node(n, "any", project=None) == -1
+
+
+def test_dedicated_node_accepted_for_matching_project():
+    n = _node(["any"], project="acme")
+    assert orchestrator.score_node(n, "any", project="acme") >= 0
+
+
+def test_general_node_accepts_any_project():
+    n = _node(["any"], project=None)
+    assert orchestrator.score_node(n, "any", project="acme") >= 0
+    assert orchestrator.score_node(n, "any", project=None) >= 0
+
+
+def test_dedicated_node_scores_higher_than_general_for_its_project():
+    dedicated = _node(["any"], project="acme", last_task_time=0.0)
+    general   = _node(["any"], project=None,   last_task_time=0.0)
+    assert orchestrator.score_node(dedicated, "any", project="acme") > \
+           orchestrator.score_node(general,   "any", project="acme")

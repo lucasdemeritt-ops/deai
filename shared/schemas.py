@@ -23,6 +23,7 @@ class ChatRequest(BaseModel):
     max_tokens: Optional[int] = 512
     temperature: Optional[float] = 0.7
     stream: Optional[bool] = False
+    project: Optional[str] = None  # route only to nodes dedicated to this project
 
 
 # ── Internal task representation ──────────────────────────────────────────────
@@ -34,6 +35,7 @@ class Task(BaseModel):
     max_tokens: int = 512
     temperature: float = 0.7
     submitted_at: float = Field(default_factory=lambda: __import__('time').time())
+    project: Optional[str] = None  # inherited from ChatRequest.project
 
 
 class TaskStatus(str, Enum):
@@ -51,7 +53,8 @@ class NodeInfo(BaseModel):
     gpu: bool = False
     vram_gb: Optional[float] = None
     ram_gb: Optional[float] = None
-    wallet: Optional[str] = None  # EVM wallet address; required for on-chain rewards
+    wallet: Optional[str] = None   # EVM wallet address; required for on-chain rewards
+    project: Optional[str] = None  # if set, node only accepts tasks for this project
 
 
 class NodeStatus(str, Enum):

@@ -151,11 +151,24 @@ verifier: Verifier = ContentVerifier()
 
 # ── Routing ───────────────────────────────────────────────────────────────────
 
-def score_node(node: NodeConnection, model: str) -> int:
+def score_node(node: NodeConnection, model: str, project: Optional[str] = None) -> int:
     """
-    Score a node as a candidate for a given model request.
-    Returns -1 if the node cannot handle the model at all.
+    Score a node as a candidate for a given model + project request.
+    Returns -1 if the node cannot or will not handle this request.
+
+    Project routing:
+      - Dedicated node (node.info.project set): only accepts tasks for its
+        declared project. A task with no project, or a different project,
+        scores -1.
+      - General node (node.info.project None): accepts all tasks regardless
+        of project tag.
     """
+    # Project gate — must check before model so dedicated nodes are excluded
+    # cleanly even if they advertise "any" model.
+    node_project = node.info.project
+    if node_project is not None and node_project != project:
+        return -1
+
     wildcard = model == "any"
     can_run = wildcard or model in node.info.models or "any" in node.info.models
     if not can_run:
@@ -168,6 +181,11 @@ def score_node(node: NodeConnection, model: str) -> int:
         score += 20
     else:
         score += 1
+
+    # Dedicated project match bonus — prefer the node purpose-built for this
+    # project over a general node that happens to be idle.
+    if project is not None and node_project == project:
+        score += 5
 
     # Hardware (gpu / vram_gb) intentionally not scored — self-reported and
     # unverified. See module docstring and docs/VERIFICATION.md build-now #3.
@@ -183,10 +201,10 @@ def score_node(node: NodeConnection, model: str) -> int:
 
 
 def find_best_node(
-    model: str, exclude: Optional[set] = None
+    model: str, exclude: Optional[set] = None, project: Optional[str] = None
 ) -> Optional[tuple[NodeConnection, int, str]]:
     """
-    Return (best_node, score, reason) for the given model, or None if no node available.
+    Return (best_node, score, reason) for the given model + project, or None.
     Only considers idle nodes. `exclude` is a set of node_ids to skip — used by
     redundant verification so the recheck lands on a *different* node than the
     one that produced the primary result. In chain mode, also skips miners that
@@ -205,7 +223,7 @@ def find_best_node(
                     log.warning(f"Node ineligible (ejected on-chain)  id={node.info.node_id}  wallet={node.info.wallet[:10]}...")
                     _warned_ineligible.add(node.info.node_id)
                 continue
-        s = score_node(node, model)
+        s = score_node(node, model, project)
         if s >= 0:
             candidates.append((s, node))
 
@@ -220,6 +238,8 @@ def find_best_node(
         parts.append("exact-model")
     else:
         parts.append("any-model")
+    if best_node.info.project:
+        parts.append(f"project={best_node.info.project}")
     if len(candidates) > 1:
         parts.append(f"{len(candidates)}-candidates")
 
@@ -320,7 +340,7 @@ async def _dispatch_and_wait(
     match = None
     deadline = time.time() + 30
     while time.time() < deadline:
-        match = find_best_node(task.model, exclude)
+        match = find_best_node(task.model, exclude, task.project)
         if match:
             break
         await asyncio.sleep(0.5)
@@ -385,6 +405,7 @@ async def chat_completions(req: ChatRequest, _auth=Depends(_check_api_key)):
         messages=req.messages,
         max_tokens=req.max_tokens or 512,
         temperature=req.temperature or 0.7,
+        project=req.project,
     )
 
     log.info(f"Request recv  id={task.task_id}  model={req.model}  nodes_online={len(nodes)}")
