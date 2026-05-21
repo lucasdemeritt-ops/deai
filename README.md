@@ -1,6 +1,6 @@
 # DeAI — Decentralized AI Network
 
-[![CI](https://github.com/theblankist/deai/actions/workflows/ci.yml/badge.svg)](https://github.com/theblankist/deai/actions/workflows/ci.yml)
+[![CI](https://github.com/lucasdemeritt-ops/deai/actions/workflows/ci.yml/badge.svg)](https://github.com/lucasdemeritt-ops/deai/actions/workflows/ci.yml)
 
 > A permissionless, censorship-resistant compute marketplace where anyone with a GPU or CPU earns by powering AI inference.
 
@@ -12,7 +12,7 @@
 
 ```bash
 # 1. Clone and install
-git clone https://github.com/theblankist/deai.git
+git clone https://github.com/lucasdemeritt-ops/deai.git
 cd deai
 pip install -r requirements.txt
 
@@ -54,15 +54,15 @@ python application/agent_runner.py --prompt "Summarize today's AI news" --budget
 
 ## The Problem
 
-AI development is a centralized monopoly. Large-scale models require massive GPU clusters owned by a handful of corporations. This creates:
+Access to AI compute is heavily concentrated. Running large models requires massive GPU clusters, and right now a small number of cloud providers control most of that infrastructure. This creates:
 
-- **High costs** — developers pay premium rates to a small number of cloud providers
-- **Censorship risk** — a single entity controls what can be run and for whom
-- **Compute divide** — only the wealthy can innovate at scale
+- **High costs** — developers pay premium rates with few alternatives
+- **Censorship risk** — a small number of entities control what can be run and for whom
+- **Compute divide** — meaningful scale is out of reach for most independent developers and researchers
 
 ## The Solution
 
-DeAI is a **Decentralized Physical Infrastructure Network (DePIN)** for AI inference. Anyone with a GPU or CPU can loan idle compute to a global marketplace. Instead of mining useless hashes, nodes perform **Proof-of-Useful-Inference** and earn tokens in return.
+DeAI is a **Decentralized Physical Infrastructure Network (DePIN)** for AI inference. Anyone with a GPU or CPU can contribute idle compute to a global marketplace. Instead of mining arbitrary hashes, nodes perform **Proof-of-Useful-Inference** and earn tokens in return.
 
 ### How It Works
 
@@ -158,7 +158,7 @@ One-line summary of the sequencing: **trustworthy work-measurement is the keysto
   - DeAIToken: [`0xE513DAb60018fc63bDB240605CE0816dE7751B27`](https://sepolia.etherscan.io/address/0xE513DAb60018fc63bDB240605CE0816dE7751B27)
   - PaymentContract: [`0x49F2ed162B5DEba2b768BFD79313FADdF3c075C8`](https://sepolia.etherscan.io/address/0x49F2ed162B5DEba2b768BFD79313FADdF3c075C8)
   - SlashingContract: [`0xDFea0F4436E3B30D2861D7b7Acf6c252Da28633c`](https://sepolia.etherscan.io/address/0xDFea0F4436E3B30D2861D7b7Acf6c252Da28633c)
-- [x] **On-chain rewards** — ~~orchestrator mints DEAI per task~~ → superseded by claim-based batch settlement: rewards accrue off-chain and are settled once per epoch as a cumulative Merkle root miners claim from `MerkleDistributor` (no per-task mint, no hot mint key). `MerkleDistributor` is new in build-now #4 and not part of the original three Sepolia deployments above — redeploy via `scripts/deploy.js` to use it.
+- [x] **On-chain rewards** — rewards accrue off-chain and are settled once per epoch as a cumulative Merkle root that miners claim from `MerkleDistributor` (no per-task mint, no hot mint key). `MerkleDistributor` is an additional contract beyond the original three Sepolia deployments above — redeploy via `scripts/deploy.js` to include it.
 - [x] **Node Client installer** — one-click setup scripts for Windows (`install_node.ps1`) and Linux/macOS (`install_node.sh`)
 - [x] **Marketplace API** — OpenAI-compatible endpoint with optional API key auth (`--api-key`)
 - [x] **Persistent Agent Runner** — `application/agent_runner.py`; runs on a token budget, pauses when exhausted, resumes on top-up
@@ -249,7 +249,7 @@ DeAI is model-agnostic by design. Miners run whatever model fits their hardware:
 | **Local large** | Llama 3 70B, Mixtral | GPU miners with 24GB+ VRAM |
 | **Cloud bridge** | GPT-4, Claude, Gemini | Optional — clearly labeled, higher cost |
 
-No single company controls the model layer. If a company pulls their model or restricts access, the network routes around it.
+No single provider controls the model layer. If a model becomes unavailable or restricted, the network routes around it.
 
 ---
 

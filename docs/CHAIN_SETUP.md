@@ -13,7 +13,7 @@ The PaymentContract (user deposit → escrow → release to miner) is **not** in
 
 ## Prerequisites
 
-- Node.js 18+ (for Hardhat)
+- Node.js 22+ (for Hardhat)
 - Python 3.10+ with `pip install -r requirements.txt` already done
 - A funded wallet for the orchestrator (testnet or local)
 
