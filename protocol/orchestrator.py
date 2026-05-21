@@ -57,6 +57,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from shared.schemas import (
@@ -522,13 +523,22 @@ def node_earnings(node_id: str):
     return ledger.summary(node_id)
 
 
+class _ClaimSubmit(BaseModel):
+    signed_tx: str  # raw signed transaction hex, with or without 0x prefix
+
+
 @app.get("/claim/{wallet}")
-def claim(wallet: str):
+def claim_get(wallet: str):
     """
-    Reward settlement is claim-based (build-now #4). A miner fetches their
-    cumulative amount + Merkle proof here, then calls MerkleDistributor.claim
-    themselves. 404 in mock mode or before this wallet appears in a settled
-    root.
+    Return a miner's pending reward info: cumulative amount, Merkle proof,
+    already-claimed amount, ABI-encoded calldata, and gas estimate.
+
+    The miner signs a tx using calldata + distributor_contract (with any
+    wallet tool — cast, MetaMask, Python, etc.) and POSTs it back to
+    POST /claim/{wallet} for broadcasting. No web3 tooling required on the
+    miner side beyond signing.
+
+    404 in mock mode or before this wallet appears in a settled root.
     """
     if chain_ledger is None:
         raise HTTPException(status_code=404, detail="Not in chain mode — no on-chain settlement.")
@@ -536,6 +546,30 @@ def claim(wallet: str):
     if info is None:
         raise HTTPException(status_code=404, detail="No settled rewards for this wallet yet.")
     return info
+
+
+@app.post("/claim/{wallet}")
+async def claim_post(wallet: str, body: _ClaimSubmit):
+    """
+    Broadcast a miner's signed claim transaction.
+
+    The miner constructs and signs the tx locally using the calldata returned
+    by GET /claim/{wallet}, then POSTs the raw signed hex here. The
+    orchestrator relays it to the chain and returns the tx hash.
+
+    MerkleDistributor.claim() requires msg.sender == miner wallet, so the
+    miner must sign with their own key — the orchestrator cannot claim on
+    their behalf.
+    """
+    if chain_ledger is None:
+        raise HTTPException(status_code=404, detail="Not in chain mode.")
+    try:
+        tx_hash = await asyncio.to_thread(chain_ledger.broadcast_tx, body.signed_tx)
+        log.info(f"Claim broadcast  wallet={wallet[:10]}...  tx={tx_hash[:18]}...")
+        return {"tx_hash": tx_hash, "status": "broadcast"}
+    except Exception as e:
+        log.error(f"Claim broadcast failed  wallet={wallet}  err={e}")
+        raise HTTPException(status_code=400, detail=f"Broadcast failed: {e}")
 
 
 @app.get("/")

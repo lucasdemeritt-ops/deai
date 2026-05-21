@@ -35,11 +35,17 @@ def mock_web3_cls():
         mock_w3.eth.account.from_key.return_value = MagicMock(
             address=ADDR_ORCH, key=b"\x00" * 32
         )
-        mock_w3.eth.contract.return_value = MagicMock()
-        # estimate_gas returns a plain int so int(gas_est * 1.3) works correctly
-        mock_w3.eth.contract.return_value.functions.slash.return_value.estimate_gas.return_value = 50_000
-        mock_w3.eth.contract.return_value.functions.recordCompletion.return_value.estimate_gas.return_value = 50_000
-        mock_w3.eth.contract.return_value.functions.updateRoot.return_value.estimate_gas.return_value = 50_000
+        mock_contract = MagicMock()
+        mock_w3.eth.contract.return_value = mock_contract
+        # estimate_gas returns plain ints so int(gas_est * 1.3) works correctly
+        mock_contract.functions.slash.return_value.estimate_gas.return_value = 50_000
+        mock_contract.functions.recordCompletion.return_value.estimate_gas.return_value = 50_000
+        mock_contract.functions.updateRoot.return_value.estimate_gas.return_value = 50_000
+        mock_contract.functions.claim.return_value.estimate_gas.return_value = 100_000
+        # claimed() returns 0 (nothing claimed yet)
+        mock_contract.functions.claimed.return_value.call.return_value = 0
+        # distributor contract address
+        mock_contract.address = "0x" + "44" * 20
         mock_w3.eth.get_block.return_value = {"baseFeePerGas": 1_000_000_000}
         mock_w3.eth.get_transaction_count.return_value = 0
         mock_w3.eth.account.sign_transaction.return_value = MagicMock(
@@ -48,6 +54,8 @@ def mock_web3_cls():
         mock_w3.eth.send_raw_transaction.return_value = b"\xab\xcd"
         mock_w3.to_hex.return_value = "0xabcd1234"
         mock_w3.to_wei.side_effect = lambda val, unit: int(val * 1e9) if unit == "gwei" else val
+        # keccak used for calldata encoding in claim_info
+        mock_w3.keccak.return_value = bytes(4)
 
         yield MockWeb3, mock_w3
 
@@ -171,13 +179,18 @@ def test_claim_info_returns_correct_structure():
     ledger.settle_epoch()
     info = ledger.claim_info(ADDR_MINER)
     assert info is not None
-    assert "wallet" in info
-    assert "cumulative_wei" in info
-    assert "cumulative_deai" in info
+    assert info["wallet"] == ADDR_MINER
+    assert info["cumulative_deai"] == pytest.approx(1.0)
+    assert info["epoch"] == 1
     assert "proof" in info
     assert "root" in info
-    assert info["epoch"] == 1
-    assert info["cumulative_deai"] == pytest.approx(1.0)
+    assert "already_claimed_wei" in info
+    assert "unclaimed_wei" in info
+    assert "distributor_contract" in info
+    assert "calldata" in info
+    assert "gas_limit" in info
+    # unclaimed == cumulative when nothing has been claimed yet
+    assert int(info["unclaimed_wei"]) == int(info["cumulative_wei"])
 
 
 # ── is_eligible ────────────────────────────────────────────────────────────────
@@ -213,3 +226,18 @@ def test_slash_onchain_returns_empty_on_error():
     ledger = _make_ledger()
     ledger.slashing.functions.slash.side_effect = Exception("revert")
     assert ledger.slash_onchain(ADDR_BAD) == ""
+
+
+# ── broadcast_tx ───────────────────────────────────────────────────────────────
+
+def test_broadcast_tx_returns_hash():
+    ledger = _make_ledger()
+    result = ledger.broadcast_tx("0xdeadbeef")
+    assert result == "0xabcd1234"
+    ledger.w3.eth.send_raw_transaction.assert_called_once_with(bytes.fromhex("deadbeef"))
+
+
+def test_broadcast_tx_strips_0x_prefix():
+    ledger = _make_ledger()
+    ledger.broadcast_tx("deadbeef")
+    ledger.w3.eth.send_raw_transaction.assert_called_once_with(bytes.fromhex("deadbeef"))

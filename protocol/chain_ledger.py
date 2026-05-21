@@ -215,22 +215,71 @@ class ChainLedger(Ledger):
 
     def claim_info(self, wallet: str) -> dict | None:
         """
-        Everything a miner needs to claim from MerkleDistributor:
-        cumulative amount (wei), Merkle proof, the settled root and epoch.
-        None if this wallet has nothing in the latest settled root.
+        Everything a miner needs to claim from MerkleDistributor.
+        Includes ABI-encoded calldata and already-claimed amount so miners
+        don't need any web3 tooling — just sign the tx and POST it back.
+        Returns None if this wallet has nothing in the latest settled root.
         """
         addr = _norm_addr(wallet)
         entry = self._latest_proofs.get(addr)
         if entry is None:
             return None
+
+        amount = entry["amount"]
+        proof_hex = entry["proof"]
+        proof_bytes = [bytes.fromhex(p[2:]) for p in proof_hex]
+
+        # How much has already been paid out in previous epochs
+        try:
+            already = self.distributor.functions.claimed(
+                Web3.to_checksum_address(addr)
+            ).call()
+        except Exception as e:
+            log.warning(f"claimed() RPC failed  wallet={addr}  err={e}")
+            already = 0
+
+        unclaimed = max(0, amount - already)
+
+        # ABI-encode claim(uint256,bytes32[]) locally — no network call needed.
+        # keccak4 = first 4 bytes of keccak256("claim(uint256,bytes32[])")
+        fn_selector = self.w3.keccak(text="claim(uint256,bytes32[])")[:4]
+        from eth_abi import encode as _abi_encode
+        encoded_args = _abi_encode(["uint256", "bytes32[]"], [amount, proof_bytes])
+        calldata = "0x" + fn_selector.hex() + encoded_args.hex()
+
+        # Gas estimate with graceful fallback
+        try:
+            gas_limit = int(
+                self.distributor.functions.claim(amount, proof_bytes)
+                .estimate_gas({"from": Web3.to_checksum_address(addr)}) * 1.3
+            )
+        except Exception:
+            gas_limit = 150_000
+
         return {
             "wallet": addr,
-            "cumulative_wei": str(entry["amount"]),
-            "cumulative_deai": entry["amount"] / _WEI,
-            "proof": entry["proof"],
+            "cumulative_wei": str(amount),
+            "cumulative_deai": amount / _WEI,
+            "already_claimed_wei": str(already),
+            "unclaimed_wei": str(unclaimed),
+            "unclaimed_deai": unclaimed / _WEI,
+            "proof": proof_hex,
             "root": self.latest_root,
             "epoch": self.settled_epoch,
+            "distributor_contract": self.distributor.address,
+            "calldata": calldata,
+            "gas_limit": gas_limit,
         }
+
+    def broadcast_tx(self, signed_tx_hex: str) -> str:
+        """
+        Broadcast a raw signed transaction and return the tx hash.
+        Used by POST /claim/<wallet> so miners can sign with their own
+        wallet and relay through the orchestrator without needing an RPC URL.
+        """
+        raw = bytes.fromhex(signed_tx_hex.removeprefix("0x"))
+        tx_hash = self.w3.eth.send_raw_transaction(raw)
+        return self.w3.to_hex(tx_hash)
 
     def slash_onchain(self, wallet: str) -> str:
         """
