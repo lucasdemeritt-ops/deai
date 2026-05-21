@@ -161,9 +161,12 @@ def score_node(node: NodeConnection, model: str) -> int:
     # Hardware (gpu / vram_gb) intentionally not scored — self-reported and
     # unverified. See module docstring and docs/VERIFICATION.md build-now #3.
 
-    # Round-robin tiebreaker: prefer the node that has been idle longest
+    # Round-robin tiebreaker: prefer the node that has been idle longest.
+    # Use a float ratio so even millisecond differences break ties — prevents
+    # the same node from monopolising primary slots when all nodes finish
+    # at nearly the same time.
     idle_seconds = time.time() - node.last_task_time
-    score += min(int(idle_seconds / 10), 5)
+    score += min(idle_seconds / 10.0, 5.0)
 
     return score
 
