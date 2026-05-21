@@ -46,6 +46,12 @@ import time
 import os
 from typing import Dict, Optional
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv optional; env vars can be set by the shell instead
+
 import uvicorn
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, Security
