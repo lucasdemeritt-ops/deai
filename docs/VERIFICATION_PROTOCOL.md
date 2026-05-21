@@ -267,6 +267,22 @@ What `protocol/{verification,orchestrator,ledger,chain_ledger,merkle}.py` +
 - ✅ Self-reported hardware (GPU/VRAM) removed from pay and routing score
   (build-now #3, the verifiable half). The *measured* benchmark/tier
   replacement (§1, §7) remains ❌ deferred.
+- ✅ **Checkers earn nothing today** — this is a known gap, not an oversight.
+  The economics of checker compensation (a fraction of primary reward, or a
+  separate verification fee) are deferred to the economics workstream
+  (ECONOMICS.md §4–§5). The routing fix ensures primary/checker slots
+  alternate fairly across nodes so no single node is permanently relegated
+  to unpaid checking.
+
+**Smoke-tested (mock + real Ollama, local):** single-node round-trip,
+real Ollama inference (qwen3:8b), redundant verification with two mock
+nodes (agreement 1.000), redundant verification with two real Ollama nodes
+(3/3 factual questions passed at threshold 0.85), three-node load
+distribution (9 tasks split 3/3/3). Six routing and dispatch bugs were
+found and fixed during this testing — see git log. **Not yet tested:**
+two real Ollama nodes on long-form or ambiguous prompts (agreement ratio
+for complex outputs is unknown); node reconnect after mid-session drop;
+Sepolia chain mode end-to-end.
 
 Any change to those files must update this section in the same commit.
 
