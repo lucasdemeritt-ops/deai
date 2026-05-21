@@ -30,6 +30,7 @@ are future tiers, not stubs.
 from __future__ import annotations
 
 import difflib
+import logging
 import random
 import re
 from abc import ABC, abstractmethod
@@ -37,6 +38,8 @@ from dataclasses import dataclass
 from typing import Callable, Optional
 
 from shared.schemas import Task, TaskResult
+
+log = logging.getLogger("verification")
 
 
 # ── Comparison ────────────────────────────────────────────────────────────────
@@ -188,13 +191,83 @@ class RedundantExecutionVerifier(Verifier):
         )
 
 
-def make_verifier(sample_rate: float, agreement_threshold: float = 0.85) -> Verifier:
+# ── Embedding comparator (semantic cosine similarity) ─────────────────────────
+
+def _cosine(a: list, b: list) -> float:
+    dot = sum(x * y for x, y in zip(a, b))
+    norm_a = sum(x * x for x in a) ** 0.5
+    norm_b = sum(x * x for x in b) ** 0.5
+    if norm_a == 0.0 or norm_b == 0.0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+
+class EmbeddingComparator:
+    """
+    Semantic similarity via embedding cosine distance.
+
+    Decided (docs/VERIFICATION_PROTOCOL.md §4): semantic embedding is the
+    chosen direction for the default_comparator replacement. SequenceMatcher
+    fails on paraphrase equivalence — two honest nodes producing the same
+    answer in different words score low even though both are correct. Cosine
+    similarity of embedding vectors handles this correctly.
+
+    Accepts any OpenAI-compatible embedding endpoint:
+      - Ollama (v0.1.27+): http://localhost:11434
+      - OpenAI API:         https://api.openai.com
+      - Any local serving
+
+    Uses the synchronous httpx client. Blocks the event loop briefly (~10-50ms
+    for a localhost Ollama call), which is acceptable at current scale. If
+    the call fails for any reason, falls back to default_comparator so a
+    temporary embedding outage does not break verification entirely.
+
+    Enable with --embedding-url <base_url>; default model nomic-embed-text
+    is available via `ollama pull nomic-embed-text`.
+    """
+
+    def __init__(self, base_url: str, model: str = "nomic-embed-text"):
+        self._url = base_url.rstrip("/") + "/v1/embeddings"
+        self._model = model
+
+    def __call__(self, a: str, b: str) -> float:
+        try:
+            import httpx
+            resp = httpx.post(
+                self._url,
+                json={"model": self._model, "input": [a, b]},
+                timeout=10.0,
+            )
+            resp.raise_for_status()
+            items = sorted(resp.json()["data"], key=lambda x: x["index"])
+            return _cosine(items[0]["embedding"], items[1]["embedding"])
+        except Exception as e:
+            log.warning(f"Embedding comparator failed ({e}); falling back to sequence ratio")
+            return default_comparator(a, b)
+
+
+def make_verifier(
+    sample_rate: float,
+    agreement_threshold: float = 0.85,
+    embedding_url: Optional[str] = None,
+    embedding_model: str = "nomic-embed-text",
+) -> Verifier:
     """
     sample_rate <= 0  → ContentVerifier (unchanged legacy behaviour, default)
     sample_rate >  0  → RedundantExecutionVerifier (optimistic Standard tier)
+
+    embedding_url: when set, use EmbeddingComparator (semantic cosine) instead
+    of the SequenceMatcher placeholder. Any OpenAI-compatible embedding
+    endpoint works (Ollama, OpenAI API, local serving).
     """
     if sample_rate <= 0.0:
         return ContentVerifier()
+    comparator: Optional[Callable[[str, str], float]] = None
+    if embedding_url:
+        comparator = EmbeddingComparator(embedding_url, embedding_model)
+        log.info(f"Comparator: semantic embedding  url={embedding_url}  model={embedding_model}")
     return RedundantExecutionVerifier(
-        sample_rate=sample_rate, agreement_threshold=agreement_threshold
+        sample_rate=sample_rate,
+        agreement_threshold=agreement_threshold,
+        comparator=comparator,
     )

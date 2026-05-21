@@ -645,6 +645,16 @@ if __name__ == "__main__":
                         default=float(os.getenv("DEAI_VERIFY_THRESHOLD", "0.85")),
                         help="Agreement threshold [0..1] for redundant verification "
                              "(default 0.85). Only used when --verify-sample-rate > 0.")
+    parser.add_argument("--embedding-url",
+                        default=os.getenv("DEAI_EMBEDDING_URL"),
+                        help="Base URL of an OpenAI-compatible embedding endpoint for "
+                             "semantic comparison (e.g. http://localhost:11434 for Ollama). "
+                             "When set, replaces the SequenceMatcher placeholder with "
+                             "embedding cosine similarity. Requires --verify-sample-rate > 0.")
+    parser.add_argument("--embedding-model",
+                        default=os.getenv("DEAI_EMBEDDING_MODEL", "nomic-embed-text"),
+                        help="Embedding model to use (default: nomic-embed-text). "
+                             "Pull with: ollama pull nomic-embed-text")
 
     args = parser.parse_args()
 
@@ -654,11 +664,22 @@ if __name__ == "__main__":
     else:
         log.info("Running in open-access mode (no API key required)")
 
-    verifier = make_verifier(args.verify_sample_rate, args.verify_threshold)
+    verifier = make_verifier(
+        args.verify_sample_rate,
+        args.verify_threshold,
+        embedding_url=args.embedding_url,
+        embedding_model=args.embedding_model,
+    )
     if args.verify_sample_rate > 0:
+        comparator_desc = (
+            f"semantic embedding  url={args.embedding_url}  model={args.embedding_model}"
+            if args.embedding_url
+            else "sequence-ratio (placeholder; use --embedding-url for semantic comparison)"
+        )
         log.info(
             f"Verification: redundant execution ENABLED  "
-            f"sample_rate={args.verify_sample_rate}  threshold={args.verify_threshold}"
+            f"sample_rate={args.verify_sample_rate}  threshold={args.verify_threshold}  "
+            f"comparator={comparator_desc}"
         )
     else:
         log.info("Verification: content-only (legacy non-empty check; no redundant rechecks)")

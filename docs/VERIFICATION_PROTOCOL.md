@@ -139,23 +139,49 @@ output across heterogeneous consumer hardware even at temperature 0
 | Method | Use when | Cost | Status |
 |---|---|---|---|
 | Exact / normalized-exact | reference stack provably deterministic for that model+hardware class | trivial | only with a strong reference stack |
-| Semantic similarity (embedding cosine ≥ T) | general default for free-form output | low | leading candidate, **not chosen** |
-| Judge-model verdict | high-value or structured tasks | medium (an inference itself) | candidate; recursion risk noted |
-| Logprob agreement | when both nodes can return token logprobs | low | candidate; needs protocol support |
+| Semantic similarity (embedding cosine ≥ T) | general default for free-form output | low | **chosen — see below** |
+| Judge-model verdict | high-value or structured tasks | medium (an inference itself) | ruled out as default: recursion risk, latency, cost |
+| Logprob agreement | when both nodes can return token logprobs | low | ruled out as default: not universally supported by Ollama |
 
 **Decided:** comparison is tolerant, pluggable behind the `Verifier` seam, and
 selected per tier/model — *not* one global hardcoded rule. A model's
 registered reference stack determines which methods are even admissible.
 
-**Deferred (empirical):** the actual method and threshold `T`. This is called
-out as open in VERIFICATION.md ("Deferred / open") and ECONOMICS.md
-("comparison tolerance").
+**Decided (comparator choice):** semantic embedding cosine similarity is the
+chosen direction for the Standard-tier default comparator. Rationale:
 
-**Today:** `default_comparator` is a whitespace/case-normalized sequence ratio.
-It is an explicitly labelled **placeholder** — sufficient to (a) prove the seam
-end-to-end and (b) catch garbage or a swapped smaller model, **not** the final
-comparator and **must not** gate mainnet economics. Replacing it requires no
-orchestrator change (that is the point of the seam).
+- *Logprob agreement* ruled out: logprob support is model- and runtime-dependent
+  and is not universally available in Ollama; it also requires protocol changes
+  to surface per-token probabilities through the task result schema.
+- *Judge model* ruled out as default: adds a full inference round-trip per
+  verification check (latency + cost), introduces a recursive trust question
+  (who watches the judge?), and creates a single point of failure. May be
+  considered for high-value tasks in a future tier.
+- *Semantic embedding cosine*: small embedding models (nomic-embed-text,
+  all-MiniLM-L6) run locally, have ~50ms latency against Ollama, require no new
+  Python dependencies (just an HTTP call the orchestrator already makes), and
+  handle paraphrase equivalence — the main failure mode of the SequenceMatcher
+  placeholder (two honest nodes saying the same thing in different words).
+
+**Deferred (still empirical):** the threshold `T` and the specific embedding
+model. These must be calibrated on testnet data across a representative sample
+of prompt types. Starting point: `T = 0.85`, `nomic-embed-text`.
+
+**Today:** `EmbeddingComparator` is implemented and wired to
+`--embedding-url`. When `--embedding-url` is not set, `default_comparator`
+(whitespace/case-normalized sequence ratio) is still used as the fallback so
+CI and no-Ollama deployments are unchanged. Operators opt into semantic
+comparison by pointing at their Ollama instance:
+
+```bash
+python protocol/orchestrator.py \
+  --verify-sample-rate 1.0 \
+  --embedding-url http://localhost:11434
+# requires: ollama pull nomic-embed-text
+```
+
+Replacing it in the future requires no orchestrator change — that is the point
+of the `Verifier` seam.
 
 ---
 
@@ -222,7 +248,7 @@ problem, as ECONOMICS.md §4–§5 state.
 |---|---|---|---|
 | `p` | per-task recheck probability | bootstrap default `0.0`; target `>0` & conditioned | `--verify-sample-rate` / env |
 | `agreement_threshold` | accept iff similarity ≥ this | bootstrap default `0.85`; final value empirical | `--verify-threshold` / env |
-| comparison method | how two outputs are compared | **deferred** (empirical) | `Verifier` seam (pluggable) |
+| comparison method | how two outputs are compared | **decided**: semantic embedding cosine; threshold empirical | `--embedding-url` / `DEAI_EMBEDDING_URL`; fallback: sequence ratio |
 | reference stack / model | pinned runtime+quant+decode+seed | **deferred** (no registry yet) | future model registry |
 | committee size `N`, quorum | adjudication panel | **deferred** | unbuilt |
 | appeal window | delay before slash is final | **deferred** | unbuilt |
@@ -263,7 +289,11 @@ What `protocol/{verification,orchestrator,ledger,chain_ledger,merkle}.py` +
   lifecycle issue that is a tracked follow-up. The Python side
   (`merkle.py`) is unit-tested in CI and its roots were cross-checked
   against the JS tree.
-- ❌ Conditioned/adaptive `p`; final comparison method.
+- ✅ Comparison method decided: `EmbeddingComparator` (semantic embedding cosine
+  via OpenAI-compatible `/v1/embeddings` endpoint). Enabled with
+  `--embedding-url`; falls back to SequenceMatcher when not configured.
+  Threshold `T` is still empirical/deferred.
+- ❌ Conditioned/adaptive `p`.
 - ✅ Self-reported hardware (GPU/VRAM) removed from pay and routing score
   (build-now #3, the verifiable half). The *measured* benchmark/tier
   replacement (§1, §7) remains ❌ deferred.
