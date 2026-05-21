@@ -126,6 +126,10 @@ class NodeConnection:
 # node_id → NodeConnection
 nodes: Dict[str, NodeConnection] = {}
 
+# node_ids already warned as ineligible — prevents log spam when the same
+# ejected node stays connected through the 30-second dispatch polling loop.
+_warned_ineligible: set = set()
+
 # task_id → asyncio.Event  (set when result arrives)
 pending_events: Dict[str, asyncio.Event] = {}
 
@@ -196,7 +200,9 @@ def find_best_node(
             continue
         if chain_ledger is not None and node.info.wallet:
             if not chain_ledger.is_eligible(node.info.wallet):
-                log.warning(f"Node ineligible (ejected on-chain)  id={node.info.node_id}  wallet={node.info.wallet[:10]}...")
+                if node.info.node_id not in _warned_ineligible:
+                    log.warning(f"Node ineligible (ejected on-chain)  id={node.info.node_id}  wallet={node.info.wallet[:10]}...")
+                    _warned_ineligible.add(node.info.node_id)
                 continue
         s = score_node(node, model)
         if s >= 0:
@@ -287,6 +293,7 @@ async def node_endpoint(ws: WebSocket):
     finally:
         if node_id and node_id in nodes:
             node = nodes.pop(node_id)
+            _warned_ineligible.discard(node_id)
             log.info(f"Node removed  id={node_id}  remaining={len(nodes)}")
             # Wake any in-flight task immediately so the caller gets a 504
             # in milliseconds rather than waiting out the 60-second timeout.

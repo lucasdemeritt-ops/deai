@@ -36,13 +36,18 @@ def mock_web3_cls():
             address=ADDR_ORCH, key=b"\x00" * 32
         )
         mock_w3.eth.contract.return_value = MagicMock()
-        mock_w3.eth.gas_price = 1_000_000_000
+        # estimate_gas returns a plain int so int(gas_est * 1.3) works correctly
+        mock_w3.eth.contract.return_value.functions.slash.return_value.estimate_gas.return_value = 50_000
+        mock_w3.eth.contract.return_value.functions.recordCompletion.return_value.estimate_gas.return_value = 50_000
+        mock_w3.eth.contract.return_value.functions.updateRoot.return_value.estimate_gas.return_value = 50_000
+        mock_w3.eth.get_block.return_value = {"baseFeePerGas": 1_000_000_000}
         mock_w3.eth.get_transaction_count.return_value = 0
         mock_w3.eth.account.sign_transaction.return_value = MagicMock(
             raw_transaction=b"\x00"
         )
         mock_w3.eth.send_raw_transaction.return_value = b"\xab\xcd"
         mock_w3.to_hex.return_value = "0xabcd1234"
+        mock_w3.to_wei.side_effect = lambda val, unit: int(val * 1e9) if unit == "gwei" else val
 
         yield MockWeb3, mock_w3
 

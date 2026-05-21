@@ -131,12 +131,26 @@ class ChainLedger(Ledger):
     # ── Write calls (state-changing — cost gas) ───────────────────────────────
 
     def _send_tx(self, fn) -> str:
-        """Build, sign, and broadcast a transaction. Returns hex tx hash. Blocking."""
+        """Build, sign, and broadcast a transaction. Returns hex tx hash. Blocking.
+
+        Uses EIP-1559 (type 2) transactions so the tx is never stuck behind
+        a baseFee spike. Legacy gasPrice transactions can get dropped or stuck
+        on post-Merge testnets when the baseFee rises above the set price.
+        """
+        nonce = self.w3.eth.get_transaction_count(self.account.address, "pending")
+        base_fee = self.w3.eth.get_block("latest")["baseFeePerGas"]
+        max_priority_fee = self.w3.to_wei(2, "gwei")
+        max_fee = base_fee * 2 + max_priority_fee
+
+        gas_est = fn.estimate_gas({"from": self.account.address})
+
         tx = fn.build_transaction({
             "from": self.account.address,
-            "nonce": self.w3.eth.get_transaction_count(self.account.address),
-            "gas": 200_000,
-            "gasPrice": self.w3.eth.gas_price,
+            "nonce": nonce,
+            "gas": int(gas_est * 1.3),
+            "maxFeePerGas": max_fee,
+            "maxPriorityFeePerGas": max_priority_fee,
+            "type": "0x2",
         })
         signed  = self.w3.eth.account.sign_transaction(tx, self.account.key)
         tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
