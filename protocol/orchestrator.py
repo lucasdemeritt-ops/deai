@@ -144,14 +144,15 @@ def score_node(node: NodeConnection, model: str) -> int:
     Score a node as a candidate for a given model request.
     Returns -1 if the node cannot handle the model at all.
     """
-    can_run = model in node.info.models or "any" in node.info.models
+    wildcard = model == "any"
+    can_run = wildcard or model in node.info.models or "any" in node.info.models
     if not can_run:
         return -1
 
     score = 0
 
-    # Exact model match strongly preferred over generic "any" nodes
-    if model in node.info.models:
+    # Exact model match strongly preferred over wildcard or generic "any" nodes
+    if not wildcard and model in node.info.models:
         score += 20
     else:
         score += 1
