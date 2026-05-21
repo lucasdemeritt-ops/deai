@@ -97,12 +97,14 @@ async def run_mock_inference(model: str, messages: list, max_tokens: int, temper
 
     last_user_msg = next((m.get("content", "") for m in reversed(messages) if m.get("role") == "user"), "")
 
+    # Seed by message content so two mock nodes always pick the same template,
+    # letting redundant verification pass in test scenarios.
+    rng = random.Random(hash(last_user_msg))
     responses = [
         f"[{model} @ DeAI node] I've processed your request: \"{last_user_msg[:60]}{'...' if len(last_user_msg) > 60 else ''}\". This is a mock response — run with --ollama for real inference.",
         f"[{model} @ DeAI node] Understood. You asked: \"{last_user_msg[:60]}{'...' if len(last_user_msg) > 60 else ''}\". In the full network, a real model would respond here.",
-        f"[{model} @ DeAI node] Mock inference complete in {processing_time:.2f}s. Use --ollama flag for real responses.",
     ]
-    content = random.choice(responses)
+    content = rng.choice(responses)
     return content, len(content.split()) + len(last_user_msg.split())
 
 
