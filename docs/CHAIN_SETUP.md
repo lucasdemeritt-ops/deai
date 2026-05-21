@@ -131,21 +131,23 @@ Nodes without a wallet still work — they're just not tracked on-chain and won'
 
 ## Sepolia testnet (live deployment)
 
-The contracts are already deployed on Ethereum Sepolia — you can point directly at them:
+The contracts are deployed on Ethereum Sepolia — you can point directly at them:
 
 | Contract | Address |
 |---|---|
-| DeAIToken | [`0xE513DAb60018fc63bDB240605CE0816dE7751B27`](https://sepolia.etherscan.io/address/0xE513DAb60018fc63bDB240605CE0816dE7751B27) |
-| PaymentContract | [`0x49F2ed162B5DEba2b768BFD79313FADdF3c075C8`](https://sepolia.etherscan.io/address/0x49F2ed162B5DEba2b768BFD79313FADdF3c075C8) |
-| SlashingContract | [`0xDFea0F4436E3B30D2861D7b7Acf6c252Da28633c`](https://sepolia.etherscan.io/address/0xDFea0F4436E3B30D2861D7b7Acf6c252Da28633c) |
+| DeAIToken | [`0x5a57f19889E9Cd89b54fF77ADb3A49BDfdc6c2dF`](https://sepolia.etherscan.io/address/0x5a57f19889E9Cd89b54fF77ADb3A49BDfdc6c2dF) |
+| PaymentContract | [`0xfcE94FdEf94AE90290e0c01BcaccCEe4ce88ed28`](https://sepolia.etherscan.io/address/0xfcE94FdEf94AE90290e0c01BcaccCEe4ce88ed28) |
+| SlashingContract | [`0xe030330AF5c60387F50a0bFd4d28eeCfA6aF022a`](https://sepolia.etherscan.io/address/0xe030330AF5c60387F50a0bFd4d28eeCfA6aF022a) |
+| MerkleDistributor | [`0xa40862db099ba7973E3062cC92fF0022FF030fb0`](https://sepolia.etherscan.io/address/0xa40862db099ba7973E3062cC92fF0022FF030fb0) |
 
 To run against the live testnet deployment, use the public Sepolia RPC (no account needed):
 
 ```env
 DEAI_RPC_URL=https://ethereum-sepolia.publicnode.com
-DEAI_SLASHING_CONTRACT=0xDFea0F4436E3B30D2861D7b7Acf6c252Da28633c
-DEAI_PAYMENT_CONTRACT=0x49F2ed162B5DEba2b768BFD79313FADdF3c075C8
-DEAI_TOKEN_CONTRACT=0xE513DAb60018fc63bDB240605CE0816dE7751B27
+DEAI_TOKEN_CONTRACT=0x5a57f19889E9Cd89b54fF77ADb3A49BDfdc6c2dF
+DEAI_PAYMENT_CONTRACT=0xfcE94FdEf94AE90290e0c01BcaccCEe4ce88ed28
+DEAI_SLASHING_CONTRACT=0xe030330AF5c60387F50a0bFd4d28eeCfA6aF022a
+DEAI_DISTRIBUTOR_CONTRACT=0xa40862db099ba7973E3062cC92fF0022FF030fb0
 ```
 
 To deploy your own instance (e.g. for testing contract changes):
