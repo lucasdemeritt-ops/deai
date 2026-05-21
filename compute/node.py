@@ -24,6 +24,7 @@ Ollama auto-detect (reads your installed models automatically):
 """
 
 import asyncio
+import hashlib
 import json
 import logging
 import random
@@ -99,7 +100,10 @@ async def run_mock_inference(model: str, messages: list, max_tokens: int, temper
 
     # Seed by message content so two mock nodes always pick the same template,
     # letting redundant verification pass in test scenarios.
-    rng = random.Random(hash(last_user_msg))
+    # Use hashlib — Python's hash() is randomized per-process and would cause
+    # two nodes to disagree even on identical input.
+    stable_seed = int(hashlib.md5(last_user_msg.encode()).hexdigest(), 16)
+    rng = random.Random(stable_seed)
     responses = [
         f"[{model} @ DeAI node] I've processed your request: \"{last_user_msg[:60]}{'...' if len(last_user_msg) > 60 else ''}\". This is a mock response — run with --ollama for real inference.",
         f"[{model} @ DeAI node] Understood. You asked: \"{last_user_msg[:60]}{'...' if len(last_user_msg) > 60 else ''}\". In the full network, a real model would respond here.",

@@ -114,6 +114,7 @@ class NodeConnection:
         self.last_seen = time.time()
         self.last_task_time: float = 0.0  # for round-robin tiebreaking
         self.tasks_completed = 0
+        self.current_task_id: Optional[str] = None
 
 
 # node_id → NodeConnection
@@ -247,6 +248,7 @@ async def node_endpoint(ws: WebSocket):
                 node = nodes[node_id]
                 node.status = NodeStatus.idle
                 node.tasks_completed += 1
+                node.current_task_id = None
                 results[result.task_id] = result
 
                 log.info(f"Result in    id={result.task_id}  node={node_id}  tokens={result.tokens_used}")
@@ -275,8 +277,12 @@ async def node_endpoint(ws: WebSocket):
         log.exception(f"Node error  id={node_id}  err={e}")
     finally:
         if node_id and node_id in nodes:
-            del nodes[node_id]
+            node = nodes.pop(node_id)
             log.info(f"Node removed  id={node_id}  remaining={len(nodes)}")
+            # Wake any in-flight task immediately so the caller gets a 504
+            # in milliseconds rather than waiting out the 60-second timeout.
+            if node.current_task_id and node.current_task_id in pending_events:
+                pending_events[node.current_task_id].set()
 
 
 # ── Dispatch ──────────────────────────────────────────────────────────────────
@@ -289,6 +295,11 @@ async def _dispatch_and_wait(
     Returns (result, node, status) where status is 'ok' | 'no_node' | 'timeout'.
     On anything other than 'ok', result and node are None.
     """
+    # Fast-fail when no nodes are registered at all — no point polling.
+    # Only wait if nodes exist but are currently busy (one may free up soon).
+    if not nodes:
+        return None, None, "no_node"
+
     match = None
     deadline = time.time() + 30
     while time.time() < deadline:
@@ -303,6 +314,7 @@ async def _dispatch_and_wait(
     node, score, reason = match
     node.status = NodeStatus.busy
     node.last_task_time = time.time()
+    node.current_task_id = task.task_id
     event = asyncio.Event()
     pending_events[task.task_id] = event
 
