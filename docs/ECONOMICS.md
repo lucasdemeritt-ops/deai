@@ -164,6 +164,12 @@ cannot break the floor while redemption holds and capacity exists.
   tying the premium to genuine demand.
 - **No pre-mine to team/founders** (already true — preserve; it is a trust and
   a regulatory asset).
+- **Reward is per output token — guard against verbosity-farming.** Token count
+  is a *work/billing* unit, never a quality signal, and it is node-self-reported.
+  Paying per token means padding output is a direct incentive; the reward design
+  must cap or discount degenerate length so nodes can't inflate pay with filler.
+  Quality is a property of the chosen model, not the protocol's to grade
+  (VERIFICATION_PROTOCOL.md §10).
 
 ---
 
@@ -203,6 +209,14 @@ optimised): check-probability `p`, slash size, comparison tolerance
 (VERIFICATION.md). A false positive from inference non-determinism slashes an
 *honest* node — existential, since providers are the scarce side. Spec the
 framework now; numbers are empirical, tuned on testnet.
+
+**Paying the verifiers (open).** Checkers earn nothing today — a known gap
+(VERIFICATION_PROTOCOL.md §8). The funding source for verification work, and for
+a proposed **verification pool** of staked larger-model judges (a premium
+"judge-verified" assurance lane, VERIFICATION_PROTOCOL.md §11), is a deferred
+economics decision: a fraction of the primary reward, or a separate
+user-elected verification fee. It must not create perverse incentives (judges
+paid to find fault, or to rubber-stamp). Empirical, testnet-tuned.
 
 ---
 
