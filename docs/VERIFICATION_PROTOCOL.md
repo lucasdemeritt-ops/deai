@@ -254,9 +254,19 @@ problem, as ECONOMICS.md §4–§5 state.
 | appeal window | delay before slash is final | **deferred** | unbuilt |
 | `slash_fraction` | portion of unvested bond burned | **deferred** (ECONOMICS.md §5) | unbuilt |
 | checker selection policy | how the checker/committee is chosen | **deferred** (collusion-sensitive) | unbuilt |
+| canary rate | fraction of tasks that are interleaved known-answer traps (§9) | **research/planned** | unbuilt |
+| qualification set | golden challenges gating tier admission (§9) | **research/planned** | unbuilt |
+| judge / verification pool | staked large-model adjudicators (§11) | **research/proposed** | unbuilt |
 
 "Bootstrap default" = a safe placeholder that changes no existing behaviour,
 not the intended production value.
+
+**Threshold boundary (observed, issue #10).** `T = 0.85` was a reasonable
+starting point but a short factual answer was seen to score `0.831` between two
+honest nodes — a false-positive boundary case. The threshold may need to be
+*length-aware* (a lower floor for short responses), and mismatch lines should
+log a prompt hash so boundary cases can be investigated. This is exactly the
+empirical tuning §4 defers to testnet, now with a concrete data point.
 
 ---
 
@@ -318,7 +328,132 @@ Any change to those files must update this section in the same commit.
 
 ---
 
-## 9. Decided vs. deferred
+## 9. Reducing redundancy — the network shares work, it does not multiply it
+
+> Principle. Redundant re-execution is a *sampled economic tax*, not the
+> operating mode. The product is *sharing* compute — different tasks to
+> different nodes, and (VISION Stage 2) one inference split across nodes. The
+> only work ever repeated is the sampled check, whose steady-state overhead is
+> ≈ `p` (a few percent), not 2×. `--verify-sample-rate 1.0` is a test setting,
+> never production. The layers below drive the need for *live* redundancy
+> toward the exception.
+
+**Operational vs. adversarial faults — two different "bad node" problems.**
+- *Operational* (down, slow, OOM, erroring, empty/malformed, wrong language,
+  truncated, degenerate repetition): caught instantly and nearly free by
+  liveness/telemetry + the `well_formed` gate. This is the only failure a
+  trusted datacenter ever has.
+- *Adversarial-but-healthy* (a node that quietly runs a cheaper model and
+  returns fluent, plausible output to pocket the difference): invisible to
+  monitoring. This is the only thing verification is actually for.
+
+**Pre-flight qualification (planned, cheap).** Before a node gets paid work for
+model M, send it *golden challenges* — prompts whose reference output (or
+reference embedding under the pinned reference stack, §1) is precomputed once,
+offline. Pass → admitted to the M tier, and the measured latency/throughput
+*sets its capability tier* — the measured-tier replacement for the deleted
+self-reported GPU flag (build-now #3). Cost: one node-side inference per
+challenge, no second live node. Proves the node genuinely runs M *now*; does
+not prove it stays honest later — hence canaries.
+
+**Canary / known-answer tasks (research → planned, cheap).** Interleave golden
+tasks into the real workload, made *indistinguishable* from genuine requests.
+Each canary's answer is precomputed, so the check is a cheap comparison with
+**no second live node** — yet deterrence equals redundancy sampling, because
+the node can't tell which task is a trap.
+- *Open challenge:* indistinguishability/freshness. A node that fingerprints
+  canaries answers them honestly and cheats the rest. Needs a large, refreshed,
+  realistic golden set, ideally drawn from real traffic.
+- *Coverage gap:* you can't pre-know the answer to a novel user prompt, so
+  canaries *complement* — they don't replace — redundancy/TEE for genuinely
+  new work.
+
+**The layered picture (the reduction goal).** qualification (screen in, set
+tier) → canaries + reputation (cheap ongoing checks; lower `p` for proven
+nodes) → redundancy (fallback for novel prompts on untrusted nodes) → TEE
+attestation (removes live verification where the hardware exists) → zkML
+(eventual everywhere-answer). Redundancy becomes the exception and shrinks over
+time. Most of this is buildable in mock mode with the existing
+`EmbeddingComparator`; all of it depends on the reference inference stack (§1).
+
+---
+
+## 10. What verification certifies — honest execution, not answer quality
+
+Two questions sound alike and must be kept apart:
+1. **Did the node faithfully run the model it was paid for?** (Integrity.)
+   Answerable — via redundancy, canaries, or TEE. *This* is the protocol's job
+   and what the economics need.
+2. **Is the answer genuinely good/helpful?** (Absolute quality.) AI-hard,
+   subjective, task-dependent — and *not* the protocol's job. Quality is a
+   property of the model the *user* chose; the node's only duty is to run it
+   faithfully. Making the protocol an answer-quality judge is the wrong target,
+   the same mistake as trying to "guarantee a node's specs."
+
+**Token count is a billing unit, not a quality signal.** Reward is paid per
+output token and the count is node-self-reported. Treating "more tokens =
+better" would reward verbosity-farming and let nodes inflate their own pay.
+Quality is non-monotonic in length anyway (truncation → too few; repetition →
+too many). Use token count for *how much work*, never for *how good*.
+
+**The cheap heuristic floor.** Format/schema validity, language detection,
+repetition/degeneration and truncation detection catch *low* quality almost
+free but cannot *certify high* quality (a floor, not a ceiling). Worth wiring
+in as an early reject for broken output — and it directly addresses the
+qwen-thinking truncation class (issue #8).
+
+**Specs are the wrong target; verify work.** A software sandbox runs on the
+operator's machine — they own the kernel and hypervisor, so it cannot attest
+hardware specs to the network (you can't trust a measurement taken on hardware
+the adversary controls). Only *hardware* attestation (TEE) can. And you mostly
+don't need specs at all: pay for *verified delivered work* and whether a node
+"really" had 80 GB is irrelevant (build-now #3). Sandboxing's legitimate role
+is isolating the workload and prompt privacy (which TEE also gives) — not
+proving capacity.
+
+---
+
+## 11. The verification pool (judge tier) — research / proposed
+
+An opt-in tier of capable, **staked** nodes running *larger* models that act as
+judges/adjudicators, rewarded for verification. It is simultaneously a concrete
+implementation of the §5.2 committee, an economic role for high-end hardware,
+and a premium "judge-verified" assurance lane users can choose and pay for.
+
+**Why it could help the network:**
+- Gives expensive GPUs a purpose beyond plain inference → more high-end
+  capacity joins → network health and depth.
+- A larger model judging a smaller model's output is a credible
+  correctness/quality signal (the standard LLM-as-judge asymmetry).
+- Operationalizes committee escalation (§5.2): disputes route to the pool's
+  staked judges; majority rules.
+- Creates a tiered trust market: cheap optimistic tier for routine work; paid
+  judge/attested tiers for high-stakes work.
+
+**Honest effects and tradeoffs (must be designed for):**
+- *Cost & who pays.* A judge verdict is a whole extra (larger) inference.
+  Funded by a premium verification fee the user opts into, or a protocol sink —
+  not free.
+- *Recursion — who verifies the verifiers?* Judges are nodes too and can be
+  lazy or collude. Mitigate with canaries among the pool, staking, reputation,
+  random assignment.
+- *Centralization pressure.* A pool of expensive nodes is fewer, richer
+  operators — tension with the consumer-hardware ethos. Keep membership
+  permissionless but stake/qualification-gated; rotate; require many judges.
+- *Judge fallibility / bias / prompt-injection.* An LLM judge is imperfect and
+  gameable, so a verdict must feed *committee majority*, never unilateral
+  slashing — the false-positive-on-an-honest-node risk (§5.2) is existential.
+- *Collusion (judge + worker).* Random, anonymous assignment + stake at risk.
+
+**Net ecosystem effect:** a healthy addition *if* cost and centralization are
+managed — it monetizes large hardware, strengthens dispute resolution, and lets
+users buy assurance proportional to what's at stake. Slots into the tier model
+(VERIFICATION.md), §4 (judge-model comparison), §5 (the committee), and
+ECONOMICS.md (reward source + premium tier). Not decided — flagged for design.
+
+---
+
+## 12. Decided vs. deferred
 
 - **Decided:** optimistic redundant execution is the Standard tier for
   Stage 0–1; silent sampling; recheck on a different node; tolerant pluggable
@@ -332,3 +467,12 @@ Any change to those files must update this section in the same commit.
   appeal mechanics; slash magnitude; collusion-resistant checker selection.
 - **Deferred to later stages:** Attested/Proven tiers; Stage 2 sharded
   attribution; replacing the single trusted orchestrator.
+- **Decided (principles, §9–§10):** verification certifies *honest execution
+  of the chosen model*, not absolute answer quality; token count is a billing
+  unit, not a quality signal; specs are the wrong target — verify delivered
+  work, and only TEE attests hardware; redundancy is a sampled tax, not the
+  operating mode — the network shares work, it never multiplies it.
+- **Research / planned (§9, §11):** pre-flight qualification (golden
+  challenges → measured tier); canary / known-answer tasks; the cheap
+  heuristic floor (truncation/repetition/format); the verification pool
+  (judge tier) as the committee implementation and a premium assurance lane.

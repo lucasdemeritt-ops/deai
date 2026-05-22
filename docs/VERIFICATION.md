@@ -41,7 +41,14 @@ pay accordingly.
 |---|---|---|
 | Standard | Optimistic redundant execution + economic slashing | Build now |
 | Attested (premium) | TEE attestation (also gives prompt privacy) | When capable miners exist |
+| Judge (pool) | Larger-model adjudication by a staked verification pool (also implements the committee + a premium assurance lane) | Research / proposed — VERIFICATION_PROTOCOL §11 |
 | Proven (research) | zkML | When practical; small models first |
+
+Cheaper verification *layers* that reduce how often live redundancy is needed —
+operational-vs-adversarial fault separation, pre-flight node qualification, and
+interleaved canary / known-answer tasks — plus the principle that the protocol
+certifies *honest execution, not answer quality*, are specified in
+[VERIFICATION_PROTOCOL.md](VERIFICATION_PROTOCOL.md) §9–§11.
 
 Rationale:
 - **Optimistic** is the only mechanism deployable today, is model-agnostic,
