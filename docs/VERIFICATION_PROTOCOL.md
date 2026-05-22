@@ -451,6 +451,39 @@ users buy assurance proportional to what's at stake. Slots into the tier model
 (VERIFICATION.md), §4 (judge-model comparison), §5 (the committee), and
 ECONOMICS.md (reward source + premium tier). Not decided — flagged for design.
 
+**How we'll decide if it works — staged validation (cheapest-fatal-first).**
+Run the stages in order; a failed gate reworks or drops the idea before money is
+spent. The detailed mechanics (committee size/quorum, judge-selection algorithm,
+fee/reward split, anti-collusion specifics, orchestrator wiring) are
+deliberately left unspecified until Stage A–B produce real numbers — speccing
+them earlier would be guesswork.
+
+- **Stage A — Offline judge-accuracy study (no budget; the kill switch).** Build
+  a labeled set of prompts × {honest output from the real model; "cheat"
+  outputs from cheaper / wrong / subtly-degraded models}. Run candidate judge
+  models as classifiers and measure the cheat-catch rate (true positive) and —
+  decisively — the honest-node flag rate (false positive), across prompt types
+  and lengths (ties to the §7 short-prompt boundary). *Gate:* if no
+  configuration keeps honest false-positives near zero while catching cheats,
+  the pool fundamentally does not work — stop here. This is largely the same
+  accuracy/threshold study already owed for the comparison method.
+- **Stage B — Economic simulation (no budget).** Model judge inference cost vs.
+  the premium fee a user would tolerate vs. cheat gain vs. sampling rate.
+  *Gate:* the fee must cover judge cost *and* the expected penalty must deter
+  cheating. If the economics never close, it is a non-starter or needs an
+  explicit subsidy.
+- **Stage C — Mock-mode mechanism prototype (no budget).** Build dispute →
+  route to pool → collect multiple verdicts → majority → outcome, with fake
+  judge nodes (as in the redundancy smoke test). Proves buildability and
+  exercises the random-assignment anti-collusion routing.
+- **Stage D — Testnet adversarial pilot (valueless tokens).** Real mixed-size
+  Ollama nodes, a real pool, nodes deliberately cheating; measure real
+  false/true-positive rates, latency, cost, and pool concentration over time.
+
+*Commit only if* A shows low honest false-positives, B's economics close, C
+proves buildability, and D holds under adversarial load. Fail any stage → fix
+or drop, cheaply, because the fatal questions are front-loaded.
+
 ---
 
 ## 12. Decided vs. deferred
