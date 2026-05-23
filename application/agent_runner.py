@@ -56,8 +56,50 @@ def send_task(endpoint: str, model: str, prompt: str, api_key: str | None) -> di
 
 
 def load_prompts(prompt_file: str) -> list[str]:
-    with open(prompt_file) as f:
-        return [line.strip() for line in f if line.strip()]
+    # utf-8-sig transparently strips a UTF-8 BOM; fall back to UTF-16 for
+    # files written by PowerShell's `echo > file` (UTF-16 LE w/ BOM). See #9.
+    try:
+        with open(prompt_file, encoding="utf-8-sig") as f:
+            return [line.strip() for line in f if line.strip()]
+    except UnicodeDecodeError:
+        with open(prompt_file, encoding="utf-16") as f:
+            return [line.strip() for line in f if line.strip()]
+
+
+# Backoff schedule (seconds) for retrying a 504 — a node busy on a long
+# inference. Length of this list = number of retries. See #7.
+RETRY_BACKOFFS = [5, 15, 45]
+
+
+def send_with_retry(endpoint: str, model: str, prompt: str, api_key: str | None) -> dict:
+    """Send a task, retrying only on 504 Gateway Timeout (node busy) with
+    exponential backoff. 503 (no nodes) and other errors are raised
+    immediately for the caller to handle. Raises the final error if all
+    retries are exhausted."""
+    for attempt in range(len(RETRY_BACKOFFS) + 1):
+        try:
+            return send_task(endpoint, model, prompt, api_key)
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 504 and attempt < len(RETRY_BACKOFFS):
+                wait = RETRY_BACKOFFS[attempt]
+                print(f"  [504 timeout] node busy — retry {attempt + 1}/{len(RETRY_BACKOFFS)} in {wait}s...")
+                time.sleep(wait)
+                continue
+            raise
+
+
+def _write_failure(output_file: str | None, task_num: int, prompt: str, error: str) -> None:
+    """Record a failed/skipped task so it is not silently dropped from the
+    output log (see #7)."""
+    if not output_file:
+        return
+    with open(output_file, "a") as f:
+        f.write(json.dumps({
+            "task": task_num,
+            "prompt": prompt,
+            "error": error,
+            "status": "failed",
+        }) + "\n")
 
 
 def run(args):
@@ -116,7 +158,7 @@ def run(args):
 
             try:
                 start   = time.time()
-                result  = send_task(endpoint, model, prompt, api_key)
+                result  = send_with_retry(endpoint, model, prompt, api_key)
                 elapsed = time.time() - start
 
                 content = result["choices"][0]["message"]["content"]
@@ -137,13 +179,19 @@ def run(args):
                         }) + "\n")
 
             except httpx.HTTPStatusError as e:
-                if e.response.status_code == 503:
+                code = e.response.status_code
+                if code == 503:
                     print(f"  [no nodes available] waiting {interval}s...")
+                elif code == 504:
+                    print(f"  [timeout] node did not respond after retries — task skipped")
+                    _write_failure(args.output_file, tasks_run, prompt, "504 timeout after retries")
                 else:
                     print(f"  [error] {e}")
+                    _write_failure(args.output_file, tasks_run, prompt, str(e))
 
             except Exception as e:
                 print(f"  [error] {e}")
+                _write_failure(args.output_file, tasks_run, prompt, str(e))
 
             if interval > 0:
                 time.sleep(interval)
