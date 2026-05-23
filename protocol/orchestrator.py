@@ -39,6 +39,7 @@ Modes:
 
 import argparse
 import asyncio
+import hashlib
 import json
 import logging
 import sys
@@ -138,7 +139,20 @@ pending_events: Dict[str, asyncio.Event] = {}
 results: Dict[str, TaskResult] = {}
 
 # simple stats
-stats = {"requests": 0, "completed": 0, "failed": 0}
+stats = {
+    "requests": 0, "completed": 0, "failed": 0,
+    # Verification instrumentation (#10) — exposed at /status so the
+    # mismatch rate is trackable over a test run.
+    "verify_checks": 0, "verify_mismatches": 0, "verify_skipped": 0,
+}
+
+
+def _prompt_hash(task) -> str:
+    """Short stable hash of a task's messages, logged alongside VERIFY lines
+    so a mismatch can be traced back to the prompt without logging its
+    content (privacy — SECURITY.md Rule 3)."""
+    blob = "\n".join(f"{m.role}:{m.content}" for m in task.messages)
+    return hashlib.sha256(blob.encode()).hexdigest()[:12]
 
 # earnings ledger
 ledger = Ledger()
@@ -443,16 +457,20 @@ async def chat_completions(req: ChatRequest, _auth=Depends(_check_api_key)):
             # No independent checker free — cannot verify. Accept optimistically
             # rather than punish a provider for a thin network; record that this
             # task went unverified.
+            stats["verify_skipped"] += 1
             log.warning(f"VERIFY skip   id={task.task_id}  reason=no-checker-available")
         else:
             outcome = verifier.compare(task, primary, r2)
+            stats["verify_checks"] += 1
             log.info(
                 f"VERIFY {'OK ' if outcome.accepted else 'MISMATCH'}  "
-                f"id={task.task_id}  primary={primary_node.info.node_id}  "
+                f"id={task.task_id}  prompt={_prompt_hash(task)}  "
+                f"primary={primary_node.info.node_id}  "
                 f"checker={n2.info.node_id}  {outcome.detail}"
             )
             if not outcome.accepted:
                 stats["failed"] += 1
+                stats["verify_mismatches"] += 1
                 # Escalation/committee not built yet. Do NOT auto-slash —
                 # docs/VERIFICATION.md flags false-positive slashing of an
                 # honest provider as existential.
