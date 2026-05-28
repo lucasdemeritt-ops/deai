@@ -1,4 +1,4 @@
-"""
+﻿"""
 Check a miner's on-chain status in SlashingContract.
 
 Usage:
@@ -35,12 +35,12 @@ def load_abi(name: str) -> list:
 def main():
     parser = argparse.ArgumentParser(description="Check miner on-chain status")
     parser.add_argument("wallet", help="Miner wallet address (0x...)")
-    parser.add_argument("--rpc-url", default=os.getenv("DEAI_RPC_URL", "http://localhost:8545"))
-    parser.add_argument("--slashing-contract", default=os.getenv("DEAI_SLASHING_CONTRACT"))
+    parser.add_argument("--rpc-url", default=os.getenv("DAI_RPC_URL", "http://localhost:8545"))
+    parser.add_argument("--slashing-contract", default=os.getenv("DAI_SLASHING_CONTRACT"))
     args = parser.parse_args()
 
     if not args.slashing_contract:
-        print("ERROR: DEAI_SLASHING_CONTRACT not set. Use --slashing-contract or set in .env")
+        print("ERROR: DAI_SLASHING_CONTRACT not set. Use --slashing-contract or set in .env")
         sys.exit(1)
 
     w3 = Web3(Web3.HTTPProvider(args.rpc_url))
@@ -60,7 +60,7 @@ def main():
     stake, tasks_completed, times_slashed, ejected = record
 
     print(f"\nMiner: {wallet}")
-    print(f"  stake:           {stake / 1e18:.4f} DEAI")
+    print(f"  stake:           {stake / 1e18:.4f} DAI")
     print(f"  tasks_completed: {tasks_completed}")
     print(f"  times_slashed:   {times_slashed}")
     print(f"  ejected:         {ejected}")

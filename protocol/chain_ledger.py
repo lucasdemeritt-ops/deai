@@ -1,9 +1,9 @@
-"""
+﻿"""
 ChainLedger — on-chain reward and reputation tracking.
 
 Wraps the in-memory Ledger with real contract calls. When a task completes,
-miners receive actual DEAI tokens minted to their wallet — not just an
-in-memory number. The orchestrator wallet holds MINTER_ROLE on DeAIToken
+miners receive actual DAI tokens minted to their wallet — not just an
+in-memory number. The orchestrator wallet holds MINTER_ROLE on DAIToken
 (granted by deploy.js) so it can issue rewards directly.
 
 Reward settlement (build-now #4): rewards are NOT minted per task. Earnings
@@ -55,8 +55,8 @@ def _load_abi(name: str) -> list:
 def _reward_wei(output_tokens: int) -> int:
     """Convert ledger reward formula to wei for on-chain minting. Must match
     ledger.record_completion exactly so on-chain and in-memory agree."""
-    deai = BASE_REWARD + TOKEN_PER_OUTPUT * output_tokens
-    return int(deai * _WEI)
+    dai = BASE_REWARD + TOKEN_PER_OUTPUT * output_tokens
+    return int(dai * _WEI)
 
 
 class ChainLedger(Ledger):
@@ -84,7 +84,7 @@ class ChainLedger(Ledger):
 
         self.token = self.w3.eth.contract(
             address=Web3.to_checksum_address(token_addr),
-            abi=_load_abi("DeAIToken"),
+            abi=_load_abi("DAIToken"),
         )
         self.slashing = self.w3.eth.contract(
             address=Web3.to_checksum_address(slashing_addr),
@@ -259,10 +259,10 @@ class ChainLedger(Ledger):
         return {
             "wallet": addr,
             "cumulative_wei": str(amount),
-            "cumulative_deai": amount / _WEI,
+            "cumulative_dai": amount / _WEI,
             "already_claimed_wei": str(already),
             "unclaimed_wei": str(unclaimed),
-            "unclaimed_deai": unclaimed / _WEI,
+            "unclaimed_dai": unclaimed / _WEI,
             "proof": proof_hex,
             "root": self.latest_root,
             "epoch": self.settled_epoch,

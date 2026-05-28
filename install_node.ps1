@@ -1,4 +1,4 @@
-# DeAI Node Installer — Windows
+﻿# DAI Node Installer — Windows
 # Run from the repo root in PowerShell:
 #   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 #   .\install_node.ps1
@@ -6,7 +6,7 @@
 $ErrorActionPreference = "Stop"
 
 Write-Host ""
-Write-Host "  DeAI Node Installer" -ForegroundColor Cyan
+Write-Host "  DAI Node Installer" -ForegroundColor Cyan
 Write-Host "  Earn tokens by sharing your GPU or CPU for AI inference."
 Write-Host ""
 

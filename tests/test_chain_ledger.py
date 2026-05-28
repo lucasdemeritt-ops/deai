@@ -1,4 +1,4 @@
-"""
+﻿"""
 Unit tests for protocol/chain_ledger.py.
 
 Web3 and all contract calls are mocked — no RPC node, no Sepolia, no keys.
@@ -180,7 +180,7 @@ def test_claim_info_returns_correct_structure():
     info = ledger.claim_info(ADDR_MINER)
     assert info is not None
     assert info["wallet"] == ADDR_MINER
-    assert info["cumulative_deai"] == pytest.approx(1.0)
+    assert info["cumulative_dai"] == pytest.approx(1.0)
     assert info["epoch"] == 1
     assert "proof" in info
     assert "root" in info

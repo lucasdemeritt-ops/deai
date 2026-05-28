@@ -1,4 +1,4 @@
-import { expect } from "chai";
+﻿import { expect } from "chai";
 import hre from "hardhat";
 
 // Tree built with the SAME convention as MerkleDistributor.sol and
@@ -48,7 +48,7 @@ function buildTree(ethers, entries) {
 }
 
 // Chai revert matchers are not available under plain mocha in this repo;
-// mirror the try/catch idiom used by deai.test.js.
+// mirror the try/catch idiom used by dai.test.js.
 async function expectRevert(promise) {
   try {
     await promise;
@@ -76,7 +76,7 @@ describe("MerkleDistributor", function () {
 
   beforeEach(async function () {
     [deployer, orchestrator, a, b, c] = await ethers.getSigners();
-    const Token = await ethers.getContractFactory("DeAIToken");
+    const Token = await ethers.getContractFactory("DAIToken");
     token = await Token.deploy();
     const Dist = await ethers.getContractFactory("MerkleDistributor");
     dist = await Dist.deploy(await token.getAddress(), orchestrator.address);

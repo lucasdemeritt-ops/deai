@@ -1,5 +1,5 @@
-"""
-DeAI Verification
+﻿"""
+DAI Verification
 -----------------
 The keystone seam. Replaces the old `mock_verify` non-empty check with a
 pluggable `Verifier` interface so the network can evolve from "accept any

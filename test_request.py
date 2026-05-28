@@ -1,5 +1,5 @@
-"""
-Quick test — send chat requests to the DeAI network.
+﻿"""
+Quick test — send chat requests to the DAI network.
 
 Usage:
     python test_request.py
@@ -69,7 +69,7 @@ def print_result(r: dict, model: str):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default="any", help="Model name to request (default: any)")
-    parser.add_argument("--message", default="Hello! What is DeAI?", help="Message to send")
+    parser.add_argument("--message", default="Hello! What is DAI?", help="Message to send")
     parser.add_argument("--count", type=int, default=1, help="Number of parallel requests to send (default: 1)")
     parser.add_argument("--url", default="http://localhost:8000", help="Orchestrator URL")
     parser.add_argument("--status", action="store_true", help="Just show network status")

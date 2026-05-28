@@ -1,4 +1,4 @@
-[
+﻿[
   {
     "inputs": [
       {
@@ -465,7 +465,7 @@
     "name": "token",
     "outputs": [
       {
-        "internalType": "contract DeAIToken",
+        "internalType": "contract DAIToken",
         "name": "",
         "type": "address"
       }

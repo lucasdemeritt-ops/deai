@@ -1,7 +1,7 @@
-import { expect } from "chai";
+﻿import { expect } from "chai";
 import hre from "hardhat";
 
-describe("DeAI Contract Suite", function () {
+describe("DAI Contract Suite", function () {
   this.timeout(60000);
 
   let conn, ethers;
@@ -30,7 +30,7 @@ describe("DeAI Contract Suite", function () {
   beforeEach(async function () {
     [deployer, orchestrator, user, miner, miner2] = await ethers.getSigners();
 
-    const Token    = await ethers.getContractFactory("DeAIToken");
+    const Token    = await ethers.getContractFactory("DAIToken");
     const Payment  = await ethers.getContractFactory("PaymentContract");
     const Slashing = await ethers.getContractFactory("SlashingContract");
 
@@ -51,9 +51,9 @@ describe("DeAI Contract Suite", function () {
   });
 
   // ─────────────────────────────────────────────────────────────────
-  // DeAIToken
+  // DAIToken
   // ─────────────────────────────────────────────────────────────────
-  describe("DeAIToken", function () {
+  describe("DAIToken", function () {
     it("mints tokens to an authorized address", async function () {
       const before = await token.balanceOf(user.address);
       await token.mint(user.address, ethers.parseEther("50"));

@@ -1,4 +1,4 @@
-# DeAI — Optimistic Verification Protocol (Spec)
+﻿# DAI — Optimistic Verification Protocol (Spec)
 
 > Status: spec doc. This is build-now item #1 from
 > [VERIFICATION.md](VERIFICATION.md) — the full specification of the **Standard
@@ -248,7 +248,7 @@ problem, as ECONOMICS.md §4–§5 state.
 |---|---|---|---|
 | `p` | per-task recheck probability | bootstrap default `0.0`; target `>0` & conditioned | `--verify-sample-rate` / env |
 | `agreement_threshold` | accept iff similarity ≥ this | bootstrap default `0.85`; final value empirical | `--verify-threshold` / env |
-| comparison method | how two outputs are compared | **decided**: semantic embedding cosine; threshold empirical | `--embedding-url` / `DEAI_EMBEDDING_URL`; fallback: sequence ratio |
+| comparison method | how two outputs are compared | **decided**: semantic embedding cosine; threshold empirical | `--embedding-url` / `DAI_EMBEDDING_URL`; fallback: sequence ratio |
 | reference stack / model | pinned runtime+quant+decode+seed | **deferred** (no registry yet) | future model registry |
 | committee size `N`, quorum | adjudication panel | **deferred** | unbuilt |
 | appeal window | delay before slash is final | **deferred** | unbuilt |
@@ -283,8 +283,9 @@ What `protocol/{verification,orchestrator,ledger,chain_ledger,merkle}.py` +
 - ✅ No-checker-free → optimistic accept, logged unverified (§2 `FINALIZED*`).
 - ✅ `p` / threshold as static knobs, default-off (§3, §7).
 - ❌ Committee adjudication, appeal window, verified-dishonesty slash (§5.2
-  steps 2–4).
-- ❌ Per-model reference inference stack / model registry (§1).
+  steps 2–4) — **designed in §13, not yet implemented**.
+- ❌ Per-model reference inference stack / model registry (§1) — **designed in
+  §12, not yet implemented**.
 - ✅ Off-chain accrual + claimable batch settlement (build-now #4):
   `MerkleDistributor.sol` + `protocol/merkle.py`; orchestrator accrues and
   publishes a cumulative root per epoch; `/claim/{wallet}` serves proofs;
@@ -319,10 +320,21 @@ real Ollama inference (qwen3:8b), redundant verification with two mock
 nodes (agreement 1.000), redundant verification with two real Ollama nodes
 (3/3 factual questions passed at threshold 0.85), three-node load
 distribution (9 tasks split 3/3/3). Six routing and dispatch bugs were
-found and fixed during this testing — see git log. **Not yet tested:**
-two real Ollama nodes on long-form or ambiguous prompts (agreement ratio
-for complex outputs is unknown); node reconnect after mid-session drop;
-Sepolia chain mode end-to-end.
+found and fixed during this testing — see git log.
+
+**Long-form agreement test (two real Ollama nodes, `EmbeddingComparator`,
+qwen3:8b, temperature 0.0, threshold 0.85):** 14/15 prompts passed across
+three categories. Scores: factual 1.000 (5/5); explanatory 0.977–0.994
+(5/5); creative 0.899–0.958 (4/5). The one failure was a 500 (empty
+content after thinking-token budget exhaustion at max_tokens=512), not a
+semantic mismatch — every prompt that produced output passed. Lowest
+agreement score was 0.899 (robot story, creative category), confirming
+0.85 is a safe threshold with adequate margin. Two bugs found and fixed
+during this run: `temperature or 0.7` treated `0.0` as falsy (fixed to
+`if ... is not None`); `ollama_resolve_model("any", ...)` picked
+`nomic-embed-text` when it appeared first in the Ollama model list (fixed
+to skip models containing "embed"). **Not yet tested:** node reconnect
+after mid-session drop; Sepolia chain mode end-to-end.
 
 Any change to those files must update this section in the same commit.
 
@@ -486,20 +498,291 @@ or drop, cheaply, because the fatal questions are front-loaded.
 
 ---
 
-## 12. Decided vs. deferred
+---
+
+## 12. Reference Inference Stack
+
+> Status: **designed** (this section). Not yet implemented — no registry
+> exists. Models currently run under `ContentVerifier` (no redundant check)
+> until a stack is registered. This is the single largest prerequisite before
+> `RedundantExecutionVerifier` can be used safely on mainnet.
+
+### 12.1 Why it exists
+
+"Two nodes disagree" is not a well-defined statement unless both nodes ran
+*exactly the same model configuration*. Even at temperature 0, different
+runtime versions, quantization formats, or decode settings produce different
+outputs for the same prompt. Without a pinned reference, a comparison
+threshold is meaningless — a 0.80 cosine score might mean "both honest nodes,
+minor phrasing variation" or "one node ran the wrong model."
+
+The reference stack is the definition of ground truth per model. It is a hard
+prerequisite for Standard-tier verification. A model that lacks a registered
+stack runs under `ContentVerifier` (accept any non-empty result) — not
+`RedundantExecutionVerifier` — because the comparison would be noise.
+
+### 12.2 What a reference stack contains
+
+A registered stack is an immutable record with the following fields:
+
+| Field | Description | Example |
+|---|---|---|
+| `model_id` | Canonical model identifier | `qwen3:8b` |
+| `runtime` | Inference runtime name + minimum version | `ollama>=0.6.0` |
+| `format` | Quantization / file format | `Q4_K_M` (GGUF) |
+| `temperature` | Decode temperature — **must be 0** | `0` |
+| `seed` | Fixed RNG seed — **must be set** | `42` |
+| `max_tokens` | Upper bound passed to runtime | `2048` |
+| `stop_tokens` | Explicit stop sequences if any | `[]` |
+| `system_prompt` | Fixed system-prompt prefix if any | `""` |
+| `digest` | SHA-256 of the model weights file(s) | `sha256:...` |
+| `registered_at` | Unix timestamp of registration | `1748000000` |
+| `registered_by` | Orchestrator wallet that signed registration | `0x...` |
+
+`temperature=0` and a fixed `seed` are **required** — a model that cannot be
+run deterministically cannot participate in Standard-tier verification. The
+`digest` binds the stack to exact weights, preventing a node from claiming
+compliance while running a smaller quantization or a different model entirely.
+
+### 12.3 How a stack is registered
+
+Registration is an orchestrator-signed operation. In the current (Stage 0–1)
+architecture:
+
+1. An operator prepares a stack definition JSON matching §12.2.
+2. The orchestrator's admin endpoint (`POST /admin/model-registry`) accepts the
+   definition, validates required fields, and appends it to the in-memory
+   (eventually on-chain) model registry.
+3. The registry is keyed by `model_id`. Re-registration overwrites the stack
+   and bumps `registered_at`; old results under the previous stack are not
+   retroactively invalidated but are marked with the prior stack version.
+4. **Not yet built:** on-chain registry (IPFS/calldata commit of the stack
+   hash); multi-party sign-off before a stack becomes active; automatic weight
+   digest verification at node registration time.
+
+### 12.4 Node compliance
+
+A node advertising a model must, when assigned a task for that model:
+
+- Run the exact runtime version specified (`>= minimum_version` is acceptable
+  for patch releases; minor version bumps require a new stack registration).
+- Use the registered quantization format. Running `Q8_0` when the stack
+  specifies `Q4_K_M` is non-compliant.
+- Pass `temperature=0` and `seed=<registered_seed>` in every inference call.
+- Not modify the system prompt.
+
+**Enforcement today:** nodes are trusted to self-report compliance. The
+reference stack gates *which models are eligible for the Standard tier* but
+does not cryptographically verify node compliance at runtime — that requires
+the Attested (TEE) tier (explicitly deferred, VERIFICATION.md).
+
+The registered weight `digest` enables a future enrollment flow: when a node
+first advertises a model, the orchestrator can request the node to return the
+digest of its weights file; a mismatch ejects the node before it ever receives
+a task.
+
+### 12.5 Model eligibility
+
+```
+model_id in registry  AND  stack.temperature == 0  AND  stack.seed is set
+  → eligible for RedundantExecutionVerifier (Standard tier)
+
+model_id not in registry
+  → falls back to ContentVerifier (optimistic, no recheck)
+  → flagged as unverified in task record
+```
+
+A network with zero registered stacks (the current state) is fully backwards
+compatible: all models run under `ContentVerifier`. Adding a stack for a model
+upgrades that model to Standard-tier verification with no orchestrator restart
+required — the registry lookup is per-task.
+
+### 12.6 Open items (not designed here)
+
+- The admin endpoint and registry persistence (in-memory today; needs a durable
+  store before restarts lose registrations).
+- Weight-digest enrollment flow at node registration time.
+- On-chain registry commit for tamper-evidence (needed before mainnet).
+- Handling runtime version ranges across heterogeneous node hardware.
+- Stack versioning and migration when a model author releases an update.
+
+---
+
+## 13. Committee Escalation Design
+
+> Status: **designed** (this section). Not yet implemented — the orchestrator
+> currently stops at `DISPUTED` (reject + `escalation_required` flag, no
+> committee convened, no slash). This section specifies the full §5.2 steps
+> 2–4 flow that must be built before verified-dishonesty slashing is live.
+
+### 13.1 When escalation triggers
+
+Escalation is triggered by one event only: a primary/checker comparison returns
+`accepted=False` from `RedundantExecutionVerifier.compare()` — i.e., the task
+reaches state `DISPUTED` (§2). **No other event triggers escalation.** In
+particular: a single malformed result (§5.1) goes directly to the slash path
+without a committee.
+
+### 13.2 Committee composition
+
+The committee is a set of N independent nodes re-running the same task.
+
+**Selection constraints:**
+- Exclude the primary and the checker (they are the parties in dispute).
+- Prefer nodes with no recent disputes (low dispute rate).
+- Prefer nodes that have been active longest (higher earned bond — more at
+  stake if they collude).
+- Select uniformly at random within the eligible pool after applying the above
+  filters, to prevent a predictable committee from being targeted.
+
+**Size N:** deferred — testnet calibration required. Starting point: `N=3`
+(minimum for a majority with one dissenter). Must be odd to avoid ties.
+Larger committees increase cost and latency; smaller ones are more susceptible
+to collusion when the network is small.
+
+**Quorum:** simple majority (`⌊N/2⌋ + 1`). In a 3-node committee, 2/3 agree
+defines ground truth.
+
+**Tie-breaking (should not occur with odd N):** if a genuine tie occurs,
+reject the result, accrue no reward for this task, and log as
+`UNRESOLVABLE`. Do not slash either side — the network cannot attribute blame.
+
+### 13.3 Re-dispatch mechanics
+
+The orchestrator issues the same task (identical `task_id`, model, messages,
+parameters) to each committee node simultaneously. Committee nodes are not told
+this is an adjudication request — the dispatch is an ordinary task message.
+
+Timeout: if fewer than `⌊N/2⌋ + 1` committee nodes return within
+`COMMITTEE_TIMEOUT_S` (default 120s, configurable), fall back to `FINALIZED*`
+(optimistic accept, logged unverified) rather than punishing either party for
+a thin network. Record both the primary and checker node IDs as elevated-`p`
+targets for future tasks.
+
+### 13.4 Verdict and blame attribution
+
+1. Collect all committee responses. Apply the same comparator and threshold as
+   the primary/checker comparison (§4).
+2. Compare each committee response to the primary result. A committee response
+   is a **primary vote** if `similarity(committee_i, primary) >=
+   agreement_threshold`; otherwise it is a **checker vote**.
+3. Majority side wins. The dissenting node(s) — whether primary, checker, or
+   a committee member — are deemed **dishonest**.
+
+**Example (N=3):**
+
+```
+committee A agrees with primary  → primary vote
+committee B agrees with primary  → primary vote
+committee C agrees with checker  → checker vote
+verdict: primary upheld (2/3), checker is dishonest → checker slashed
+```
+
+**False-positive protection:**
+- A single disagreement between primary and checker, with no committee
+  corroboration, never slashes. The committee is convened first.
+- If the committee itself splits evenly (tie — should not happen with odd N),
+  treat as `UNRESOLVABLE`, no slash.
+- A committee member whose output matches neither primary nor checker beyond
+  threshold is itself suspicious; flag it for elevated `p` but do not slash it
+  from this single event alone — two independent events required before a
+  committee member is slashed.
+
+### 13.5 Slash mechanics
+
+On a committee verdict of dishonesty:
+
+1. **Reverse accrual:** the dishonest node's reward for this task is removed
+   from the off-chain accrual ledger (it was never finalized since the task was
+   in `DISPUTED`).
+2. **Slash bond:** deduct `slash_fraction` (deferred, testnet) of the
+   dishonest node's **cumulative unvested accrual** — the same bond described
+   in ECONOMICS.md §4. This is earned income held in escrow, not capital the
+   node had to post upfront (the no-barrier-to-entry property is preserved).
+3. **Burn:** slashed tokens are sent to the burn sink (ECONOMICS.md §2). They
+   are not redistributed to the winning party to avoid perverse checker
+   incentives.
+4. **Eject if bond exhausted:** if the slash reduces the node's unvested
+   accrual to zero or below, eject the node (same path as `SlashingContract`).
+5. **Compensate checker/committee (deferred):** the economics of verification
+   incentive payments are an open item (ECONOMICS.md §4–§5). Today, checkers
+   and committee nodes earn nothing; the routing fix ensures they are not
+   permanently relegated to unpaid verification (slots alternate fairly).
+
+### 13.6 Appeal window
+
+Before a slash is applied as irreversible:
+
+1. The verdict is logged with a timestamp.
+2. An **appeal window** of `APPEAL_WINDOW_S` (deferred, testnet — starting
+   point: 3600s / 1 hour) elapses during which the node can contest.
+3. **Appeal mechanism (not yet designed):** the appeal path requires a
+   governance or oracle mechanism not yet built. For now, the appeal window is
+   a time-lock only — it delays the slash but does not create a real appeal
+   path. The slash fires automatically when the window expires.
+4. During the appeal window, the node continues operating (it is not
+   pre-emptively ejected) but its `p` is elevated so subsequent tasks are
+   checked at higher frequency.
+
+### 13.7 Escalation state flow (extends §2)
+
+```
+DISPUTED
+  └─> COMMITTEE_DISPATCHED    orchestrator: select N nodes, dispatch same task
+        └─> COMMITTEE_WAITING (until ⌊N/2⌋+1 responses or timeout)
+              ├─ timeout ─> FINALIZED* (optimistic, unverified, elevated-p)
+              └─> COMMITTEE_VERDICT
+                    ├─ primary upheld ─> FINALIZED (primary reward accrues)
+                    │                    checker: elevated-p, reverse-its-accrual
+                    ├─ checker upheld ─> APPEAL_PENDING (primary: elevated-p,
+                    │                    slash queued after APPEAL_WINDOW_S)
+                    └─> tie            ─> UNRESOLVABLE (no reward, no slash)
+```
+
+`APPEAL_PENDING → SLASHED` fires after `APPEAL_WINDOW_S` with no successful
+appeal. `SLASHED` executes steps 1–5 of §13.5.
+
+### 13.8 Parameters
+
+| Parameter | Meaning | Status | Default |
+|---|---|---|---|
+| `N` | Committee size | deferred, testnet | 3 (odd) |
+| `quorum` | Votes needed for majority | derived: `⌊N/2⌋ + 1` | 2 |
+| `COMMITTEE_TIMEOUT_S` | Max wait for committee responses | empirical | 120s |
+| `APPEAL_WINDOW_S` | Delay before slash is irreversible | empirical | 3600s |
+| `slash_fraction` | Fraction of unvested bond burned | deferred (ECONOMICS.md §5) | TBD |
+
+### 13.9 What is not designed here
+
+- The appeal mechanism proper (requires governance or a trusted oracle not yet
+  built).
+- Collusion-resistant committee selection when the attacker controls a large
+  share of the node pool (explicitly deferred as an open problem in §6).
+- Committee member compensation economics (deferred to ECONOMICS.md §4–§5).
+- The on-chain slash transaction path for committee verdicts (currently only
+  `SlashingContract.slash()` exists — the committee verdict must be bridged to
+  it, requiring a new contract call or relayer design).
+
+---
+
+## 14. Decided vs. deferred
 
 - **Decided:** optimistic redundant execution is the Standard tier for
   Stage 0–1; silent sampling; recheck on a different node; tolerant pluggable
   comparison; two-sample disagreement never auto-slashes; slashing requires
-  committee majority and is taken from the unvested earned bond and burned;
-  reference inference stack is a hard prerequisite for a model to enter the
-  Standard tier; verification work-measurement is the same substrate the
-  redemption rate consumes (one keystone).
+  committee majority (§13) and is taken from the unvested earned bond and
+  burned; reference inference stack is a hard prerequisite for a model to
+  enter the Standard tier (§12); verification work-measurement is the same
+  substrate the redemption rate consumes (one keystone); semantic embedding
+  cosine similarity is the Standard-tier default comparator (§4).
 - **Deferred (empirical, testnet — more than one attempt expected):** `p` and
-  its conditioning; comparison method and threshold; committee size/quorum;
-  appeal mechanics; slash magnitude; collusion-resistant checker selection.
+  its conditioning; comparison threshold `T`; committee size `N` and quorum;
+  `COMMITTEE_TIMEOUT_S`; `APPEAL_WINDOW_S`; slash magnitude (`slash_fraction`);
+  collusion-resistant checker/committee selection; checker/committee compensation.
 - **Deferred to later stages:** Attested/Proven tiers; Stage 2 sharded
-  attribution; replacing the single trusted orchestrator.
+attribution; replacing the single trusted orchestrator; on-chain model
+  registry; appeal mechanism proper (governance/oracle).
+attribution; replacing the single trusted orchestrator.
 - **Decided (principles, §9–§10):** verification certifies *honest execution
   of the chosen model*, not absolute answer quality; token count is a billing
   unit, not a quality signal; specs are the wrong target — verify delivered

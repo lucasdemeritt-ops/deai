@@ -1,6 +1,6 @@
-# DeAI — Decentralized AI Network
+﻿# DAI — Decentralized AI Network
 
-[![CI](https://github.com/lucasdemeritt-ops/deai/actions/workflows/ci.yml/badge.svg)](https://github.com/lucasdemeritt-ops/deai/actions/workflows/ci.yml)
+[![CI](https://github.com/lucasdemeritt-ops/dai/actions/workflows/ci.yml/badge.svg)](https://github.com/lucasdemeritt-ops/dai/actions/workflows/ci.yml)
 
 > A permissionless, censorship-resistant compute marketplace where anyone with a GPU or CPU earns by powering AI inference.
 
@@ -12,8 +12,8 @@
 
 ```bash
 # 1. Clone and install
-git clone https://github.com/lucasdemeritt-ops/deai.git
-cd deai
+git clone https://github.com/lucasdemeritt-ops/dai.git
+cd dai
 pip install -r requirements.txt
 
 # Terminal 1 — start the orchestrator
@@ -62,14 +62,14 @@ Access to AI compute is heavily concentrated. Running large models requires mass
 
 ## The Solution
 
-DeAI is a **Decentralized Physical Infrastructure Network (DePIN)** for AI inference. Anyone with a GPU or CPU can contribute idle compute to a global marketplace. Instead of mining arbitrary hashes, nodes perform **Proof-of-Useful-Inference** and earn tokens in return.
+DAI is a **Decentralized Physical Infrastructure Network (DePIN)** for AI inference. Anyone with a GPU or CPU can contribute idle compute to a global marketplace. Instead of mining arbitrary hashes, nodes perform **Proof-of-Useful-Inference** and earn tokens in return.
 
 ### How It Works
 
 1. **Request** — A developer submits an AI task (e.g., "Summarize this PDF") via a Smart Contract
 2. **Allocation** — The protocol routes the task to the most efficient available Worker Node based on hardware capability and proximity
 3. **Execution** — The node runs model inference inside a secure, verifiable environment (TEE or ZK-ML)
-4. **Verification & Reward** — The result is cryptographically verified; the Smart Contract pays the node operator in DeAI tokens
+4. **Verification & Reward** — The result is cryptographically verified; the Smart Contract pays the node operator in DAI tokens
 
 > **Status:** steps 3–4 describe the *target* design. Today inference runs in a normal process. Verification now goes through a pluggable `Verifier` seam: the default is still a non-empty-content check, with an *optimistic redundant-execution* verifier available behind `--verify-sample-rate` (off by default). Committee escalation, the empirical comparison method, TEE/zkML tiers, and on-chain escrow payment are not yet implemented — see [Verification & economics (current state)](#verification--economics-current-state) below.
 
@@ -120,8 +120,8 @@ The sections above describe the target system. Several core pieces are deliberat
 
 - **Verification is early.** The old `mock_verify` is gone — replaced by a pluggable `Verifier` seam (`protocol/verification.py`). The default `ContentVerifier` still only checks for non-empty content (legacy behaviour, so nothing changes unless opted in). An optimistic `RedundantExecutionVerifier` exists and is unit-tested: with a sampling rate it silently re-runs a task on a second node and compares. It is **off by default** and still incomplete — committee escalation is not built (a two-sample mismatch is rejected but no node is auto-slashed, deliberately, to avoid false-positive slashing of honest providers), the comparison method is a labelled placeholder pending empirical work, and the per-model reference inference stack does not exist yet. So real Proof-of-Useful-Inference is in progress, not done.
 - **No escrow in the live path.** `PaymentContract` (user deposit → escrow → release to miner) is written and unit-tested, but it is *not* wired into the running orchestrator. The live reward path accrues earnings off-chain and settles them as a cumulative Merkle root miners claim from `MerkleDistributor` (no per-task mint) — but there is still no *user payment or escrow*: rewards are minted into existence, not funded by a paying user.
-- **DEAI has no monetary value.** The contracts are deployed only on the Ethereum Sepolia *testnet*. Sepolia DEAI is a valueless test token used to prove the mechanics. Nothing here is real money.
-- **The chain is an open question.** Sepolia is for testing only. Whether DeAI ultimately runs on an existing chain or its own sovereign chain is an explicitly undecided, deferred decision — not committed in either direction.
+- **DAI has no monetary value.** The contracts are deployed only on the Ethereum Sepolia *testnet*. Sepolia DAI is a valueless test token used to prove the mechanics. Nothing here is real money.
+- **The chain is an open question.** Sepolia is for testing only. Whether DAI ultimately runs on an existing chain or its own sovereign chain is an explicitly undecided, deferred decision — not committed in either direction.
 
 Closing the verification gap is the single highest priority before any of the token economics can be trusted.
 
@@ -133,7 +133,7 @@ The current-state notes above are deliberately honest about what is *not* yet bu
 
 - **[docs/VISION.md](docs/VISION.md)** — the actual goal: many nodes *contribute to* an inference, not one node per task. The honest staircase to get there (single-node → job-parallel swarms → model-sharded inference → distributed training) and why each step is independently testable.
 - **[docs/VERIFICATION.md](docs/VERIFICATION.md)** — the keystone decision: verification is *optimistic-first* (redundant execution + economic slashing), *tiered* toward TEE attestation, with zkML as a research track. Real verification comes **before** mainnet, not after. Full Stage 0–1 protocol spec (state machine, parameters, threat model, code⇄spec conformance ledger) in **[docs/VERIFICATION_PROTOCOL.md](docs/VERIFICATION_PROTOCOL.md)**.
-- **[docs/ECONOMICS.md](docs/ECONOMICS.md)** — the token model: DEAI is redeemable for real inference at a rate that is *transparently and verifiably determined, never set at anyone's discretion* (the redemption invariant + the immutable self-check). Stable on-ramps absorb volatility; the token is non-transferable and valueless until an explicit graduation checklist is met.
+- **[docs/ECONOMICS.md](docs/ECONOMICS.md)** — the token model: DAI is redeemable for real inference at a rate that is *transparently and verifiably determined, never set at anyone's discretion* (the redemption invariant + the immutable self-check). Stable on-ramps absorb volatility; the token is non-transferable and valueless until an explicit graduation checklist is met.
 
 One-line summary of the sequencing: **trustworthy work-measurement is the keystone — honest pay and an honest redemption rate both depend on it — so verification and economic hardening come first, and mainnet is a graduation exam gated behind them, not a milestone to rush.**
 
@@ -151,11 +151,11 @@ One-line summary of the sequencing: **trustworthy work-measurement is the keysto
 ### Phase 2 — Chain & Infrastructure ✓
 **Blockchain strategy:** Smart contracts are deployed to a free testnet (Ethereum Sepolia) with a valueless test token. The token stays non-transferable until verification and economics are proven. Mainnet, and the existing-chain-vs-sovereign-chain decision, are deliberately deferred and gated — see [docs/ECONOMICS.md](docs/ECONOMICS.md), [docs/VERIFICATION.md](docs/VERIFICATION.md), and the re-ordered roadmap below.
 
-- [x] **DeAI token contract** — ERC-20 token with mint/burn roles; written, tested (24/24 passing)
+- [x] **DAI token contract** — ERC-20 token with mint/burn roles; written, tested (24/24 passing)
 - [x] **Payment contract** — escrow: user deposits tokens, released to miner on verified task completion; written, tested — **not yet integrated into the live orchestrator path** (see *Verification & economics (current state)* above)
 - [x] **Slashing contract** — miners who return bad results lose a portion of their staked tokens; written, tested
 - [x] **Testnet deployment** — all three contracts live on Ethereum Sepolia
-  - DeAIToken: [`0xE513DAb60018fc63bDB240605CE0816dE7751B27`](https://sepolia.etherscan.io/address/0xE513DAb60018fc63bDB240605CE0816dE7751B27)
+  - DAIToken: [`0xE513DAb60018fc63bDB240605CE0816dE7751B27`](https://sepolia.etherscan.io/address/0xE513DAb60018fc63bDB240605CE0816dE7751B27)
   - PaymentContract: [`0x49F2ed162B5DEba2b768BFD79313FADdF3c075C8`](https://sepolia.etherscan.io/address/0x49F2ed162B5DEba2b768BFD79313FADdF3c075C8)
   - SlashingContract: [`0xDFea0F4436E3B30D2861D7b7Acf6c252Da28633c`](https://sepolia.etherscan.io/address/0xDFea0F4436E3B30D2861D7b7Acf6c252Da28633c)
 - [x] **On-chain rewards** — rewards accrue off-chain and are settled once per epoch as a cumulative Merkle root that miners claim from `MerkleDistributor` (no per-task mint, no hot mint key). `MerkleDistributor` is an additional contract beyond the original three Sepolia deployments above — redeploy via `scripts/deploy.js` to include it.
@@ -175,7 +175,7 @@ Nothing below ships with real value until this phase is proven. All of it runs o
 - [ ] **Trustworthy work-measurement** — the shared substrate that both honest pay *and* the honest redemption rate depend on.
 - [ ] **Tiered verification** — Standard (optimistic) now; Attested (TEE, also prompt privacy) as a premium lane; zkML as a research track.
 - [ ] **Vesting-bond sybil resistance** — no upfront stake; unvested earnings act as a slashable bond. Preserves no-barrier-to-entry.
-- [ ] **Redemption-anchored economics** — DEAI redeemable for inference at a transparently determined rate; stablecoin/fiat on-ramps; burn sinks.
+- [ ] **Redemption-anchored economics** — DAI redeemable for inference at a transparently determined rate; stablecoin/fiat on-ramps; burn sinks.
 - [ ] **The immutable self-check** — open on-chain rule, tamper-evident inputs, publicly recomputable, rule changes only via a pre-announced timelocked path. (Expected to take more than one iteration — see ECONOMICS.md.)
 - [ ] **Decentralize the orchestrator** — remove the single-trusted-node routing and reward-root (`UPDATER_ROLE`) authority. (The hot token `MINTER_ROLE` is already gone — build-now #4.)
 
@@ -185,7 +185,7 @@ The contribution staircase begins (VISION.md Stage 1) alongside openness work.
 
 - [ ] **Job parallelism / agent swarms** — large jobs decomposed into independent sub-tasks across many nodes, results aggregated by a coordinator.
 - [ ] **Reward pooling & dedicated mining** — supporters point nodes at a specific project; pooled rewards. Task sponsorship; shareable project pages.
-- [ ] **Provider-passthrough auth** — authenticate with an existing AI provider (Anthropic, OpenAI, etc.); DeAI never touches billing or credentials.
+- [ ] **Provider-passthrough auth** — authenticate with an existing AI provider (Anthropic, OpenAI, etc.); DAI never touches billing or credentials.
 - [ ] **Cloud bridge nodes** — contribute existing provider subscription capacity; the provider bills the miner directly.
 - [ ] **Relay layer** — hide node IPs from the orchestrator (SECURITY.md Rule 6); turns Rules 1 & 3 from policy into architecture.
 - [ ] **Model marketplace** — community-published model registry; any model, any hardware tier.
@@ -217,13 +217,13 @@ The actual destination (VISION.md Stages 2–3): no node needs to run a whole la
 
 ## Collaborative Compute
 
-A core social feature of DeAI. A single person can launch an agent — a research crawler, a creative writing assistant, an automation task — and invite others to keep it alive:
+A core social feature of DAI. A single person can launch an agent — a research crawler, a creative writing assistant, an automation task — and invite others to keep it alive:
 
 **Token Donation** — Share your task's wallet address. Anyone can send tokens to extend its runtime. No account required, no permission needed.
 
 **Dedicated Mining** — Share a node configuration link. Supporters run a node pointed specifically at your project. Their compute goes directly toward your agent's tasks, and they earn tokens for doing it.
 
-This turns every DeAI agent into a potential community — funded and powered by people who believe in what it's doing.
+This turns every DAI agent into a potential community — funded and powered by people who believe in what it's doing.
 
 ---
 
@@ -236,14 +236,14 @@ The goal is a two-line migration from centralized APIs:
 response = client.openai.create(model="gpt-4", ...)
 
 # After
-response = client.deai.create(model="llama-3", ...)
+response = client.dai.create(model="llama-3", ...)
 ```
 
 ---
 
 ## Model Support
 
-DeAI is model-agnostic by design. Miners run whatever model fits their hardware:
+DAI is model-agnostic by design. Miners run whatever model fits their hardware:
 
 | Tier | Examples | Who runs it |
 |---|---|---|
@@ -267,7 +267,7 @@ No single provider controls the model layer. If a model becomes unavailable or r
 ## Project Structure
 
 ```
-deai/
+dai/
 ├── compute/        # Node client software
 ├── protocol/       # Orchestration, smart contracts, verification, ledger
 ├── application/    # API server, SDK, dashboard

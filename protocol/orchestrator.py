@@ -1,5 +1,5 @@
-"""
-DeAI Orchestrator
+﻿"""
+DAI Orchestrator
 -----------------
 The network brain. Responsibilities:
   - Accept inference requests via HTTP (OpenAI-compatible API)
@@ -91,7 +91,7 @@ async def _lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="DeAI Orchestrator", version="0.1.0", lifespan=_lifespan)
+app = FastAPI(title="DAI Orchestrator", version="0.1.0", lifespan=_lifespan)
 
 
 # ── State ─────────────────────────────────────────────────────────────────────
@@ -403,8 +403,8 @@ async def chat_completions(req: ChatRequest, _auth=Depends(_check_api_key)):
     task = Task(
         model=req.model,
         messages=req.messages,
-        max_tokens=req.max_tokens or 512,
-        temperature=req.temperature or 0.7,
+        max_tokens=req.max_tokens if req.max_tokens is not None else 512,
+        temperature=req.temperature if req.temperature is not None else 0.7,
         project=req.project,
     )
 
@@ -595,64 +595,64 @@ async def claim_post(wallet: str, body: _ClaimSubmit):
 
 @app.get("/")
 def root():
-    return {"service": "DeAI Orchestrator", "version": "0.1.0", "docs": "/docs", "status": "/status"}
+    return {"service": "DAI Orchestrator", "version": "0.1.0", "docs": "/docs", "status": "/status"}
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="DeAI Orchestrator")
+    parser = argparse.ArgumentParser(description="DAI Orchestrator")
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument("--api-key", default=os.getenv("DEAI_API_KEY"),
+    parser.add_argument("--api-key", default=os.getenv("DAI_API_KEY"),
                         help="Require this key on /v1/chat/completions requests (Bearer token). "
                              "Omit for open access (local dev default).")
 
     # On-chain mode (opt-in — mock mode is the default)
     parser.add_argument("--chain", action="store_true",
-                        help="Enable on-chain mode (real DEAI rewards + SlashingContract)")
+                        help="Enable on-chain mode (real DAI rewards + SlashingContract)")
     parser.add_argument("--rpc-url",
-                        default=os.getenv("DEAI_RPC_URL", "http://localhost:8545"),
+                        default=os.getenv("DAI_RPC_URL", "http://localhost:8545"),
                         help="RPC endpoint for the chain (default: localhost Hardhat node)")
     parser.add_argument("--token-contract",
-                        default=os.getenv("DEAI_TOKEN_CONTRACT"),
-                        help="Deployed DeAIToken address")
+                        default=os.getenv("DAI_TOKEN_CONTRACT"),
+                        help="Deployed DAIToken address")
     parser.add_argument("--slashing-contract",
-                        default=os.getenv("DEAI_SLASHING_CONTRACT"),
+                        default=os.getenv("DAI_SLASHING_CONTRACT"),
                         help="Deployed SlashingContract address")
     parser.add_argument("--payment-contract",
-                        default=os.getenv("DEAI_PAYMENT_CONTRACT"),
+                        default=os.getenv("DAI_PAYMENT_CONTRACT"),
                         help="Deployed PaymentContract address")
     parser.add_argument("--distributor-contract",
-                        default=os.getenv("DEAI_DISTRIBUTOR_CONTRACT"),
+                        default=os.getenv("DAI_DISTRIBUTOR_CONTRACT"),
                         help="Deployed MerkleDistributor address (reward settlement)")
     parser.add_argument("--orchestrator-key",
-                        default=os.getenv("DEAI_ORCHESTRATOR_KEY"),
+                        default=os.getenv("DAI_ORCHESTRATOR_KEY"),
                         help="Orchestrator wallet private key (needs UPDATER_ROLE on "
                              "MerkleDistributor + ORCHESTRATOR_ROLE on SlashingContract)")
     parser.add_argument("--settle-interval", type=int,
-                        default=int(os.getenv("DEAI_SETTLE_INTERVAL", "3600")),
+                        default=int(os.getenv("DAI_SETTLE_INTERVAL", "3600")),
                         help="Seconds between reward-settlement epochs (publish a "
                              "cumulative Merkle root). Chain mode only. Default 3600.")
 
     # Verification (Standard tier — docs/VERIFICATION.md)
     parser.add_argument("--verify-sample-rate", type=float,
-                        default=float(os.getenv("DEAI_VERIFY_SAMPLE_RATE", "0.0")),
+                        default=float(os.getenv("DAI_VERIFY_SAMPLE_RATE", "0.0")),
                         help="Fraction of tasks [0..1] silently re-run on a second "
                              "node for redundant verification. 0 = legacy non-empty "
                              "check only, no rechecks (default).")
     parser.add_argument("--verify-threshold", type=float,
-                        default=float(os.getenv("DEAI_VERIFY_THRESHOLD", "0.85")),
+                        default=float(os.getenv("DAI_VERIFY_THRESHOLD", "0.85")),
                         help="Agreement threshold [0..1] for redundant verification "
                              "(default 0.85). Only used when --verify-sample-rate > 0.")
     parser.add_argument("--embedding-url",
-                        default=os.getenv("DEAI_EMBEDDING_URL"),
+                        default=os.getenv("DAI_EMBEDDING_URL"),
                         help="Base URL of an OpenAI-compatible embedding endpoint for "
                              "semantic comparison (e.g. http://localhost:11434 for Ollama). "
                              "When set, replaces the SequenceMatcher placeholder with "
                              "embedding cosine similarity. Requires --verify-sample-rate > 0.")
     parser.add_argument("--embedding-model",
-                        default=os.getenv("DEAI_EMBEDDING_MODEL", "nomic-embed-text"),
+                        default=os.getenv("DAI_EMBEDDING_MODEL", "nomic-embed-text"),
                         help="Embedding model to use (default: nomic-embed-text). "
                              "Pull with: ollama pull nomic-embed-text")
 

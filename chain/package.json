@@ -1,10 +1,10 @@
-{
+﻿{
   "name": "chain",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "mocha test/deai.test.js",
+    "test": "mocha test/dai.test.js",
     "test:merkle": "mocha test/MerkleDistributor.test.js"
   },
   "keywords": [],

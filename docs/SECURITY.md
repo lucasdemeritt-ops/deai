@@ -1,4 +1,4 @@
-# DeAI Security Principles
+﻿# DAI Security Principles
 
 These are non-negotiable design rules. Every contributor must read this before touching the codebase. Every feature must be evaluated against these principles before it ships.
 
@@ -6,7 +6,7 @@ These are non-negotiable design rules. Every contributor must read this before t
 
 ## The Core Promise
 
-A user or miner on the DeAI network should never have to trust us. They should be able to verify — by reading the open source code — that their identity, credentials, and content are safe. Trust is not a policy. It is a property of the system.
+A user or miner on the DAI network should never have to trust us. They should be able to verify — by reading the open source code — that their identity, credentials, and content are safe. Trust is not a policy. It is a property of the system.
 
 ---
 
@@ -124,7 +124,7 @@ Until the relay layer is built, nodes connect directly and the orchestrator sees
 For honesty, the centralizations that exist **today** and are **not** the intended end state:
 
 1. **Single orchestrator.** One core-team node routes all tasks and is the sole holder of `UPDATER_ROLE` on `MerkleDistributor` (it alone publishes the cumulative reward roots). It no longer holds the token `MINTER_ROLE` — rewards accrue off-chain and the distributor mints only what a published root authorizes, so there is no permanently-hot mint key (build-now #4). Task routing and reward-root authority remain centralized for the bootstrapping phase. (Also documented in the README.) Decentralizing the orchestrator is a roadmap priority.
-2. **Token admin key.** `DeAIToken` grants `DEFAULT_ADMIN_ROLE` to the deploying wallet. That wallet can grant itself `MINTER_ROLE` and mint without limit. This is a deployment convenience for the testnet phase — it is **not** the intended final design. Before any mainnet deployment this role must be renounced, time-locked, or moved to governance. The exact mechanism is an open decision, not yet made.
+2. **Token admin key.** `DAIToken` grants `DEFAULT_ADMIN_ROLE` to the deploying wallet. That wallet can grant itself `MINTER_ROLE` and mint without limit. This is a deployment convenience for the testnet phase — it is **not** the intended final design. Before any mainnet deployment this role must be renounced, time-locked, or moved to governance. The exact mechanism is an open decision, not yet made.
 
 On the live testnet you are currently trusting the core team not to abuse these keys. The mission is to engineer that requirement away — not to pretend it doesn't exist. These are tracked as current-vs-target gaps.
 

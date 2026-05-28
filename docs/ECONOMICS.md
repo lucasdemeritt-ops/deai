@@ -1,4 +1,4 @@
-# DeAI — Economics (Mapped Direction)
+﻿# DAI — Economics (Mapped Direction)
 
 > Status: direction doc. The token model is **decided** (see First Principle
 > and §1). Recommended mechanics with honest tradeoffs; empirical parameters
@@ -9,7 +9,7 @@
 
 ## First Principle — The Redemption Invariant
 
-**DEAI is always redeemable for real inference, at a rate that is
+**DAI is always redeemable for real inference, at a rate that is
 transparently and verifiably determined — never set at anyone's discretion.**
 
 This is the top of the document, above every other choice, because it is what
@@ -26,7 +26,7 @@ than hoped for.
 
 Hold this invariant and almost every other parameter can flex and be tested.
 Break it — make the token non-redeemable, or let the network be unable to honor
-redemption — and DeAI is indistinguishable from the coins that died for the
+redemption — and DAI is indistinguishable from the coins that died for the
 wrong reasons, regardless of intent.
 
 ---
@@ -47,12 +47,12 @@ disease; the First Principle is the vaccine.
 
 ## 1. The model (decided): redemption-anchored work token, stable-edged
 
-DEAI **is** the network's economic medium — the founding thesis is preserved,
+DAI **is** the network's economic medium — the founding thesis is preserved,
 not sidelined. It earns the "real, not Ponzi" position through the invariant,
 not through marketing. Two consequences follow:
 
 1. **Inference is priced in compute units, not dollars-of-token.** The token
-   *is* the compute unit. A given amount of DEAI always redeems for a
+   *is* the compute unit. A given amount of DAI always redeems for a
    corresponding unit of inference work at the transparently-determined rate
    (see the rate-mechanism subsection below). The token may trade *above* this
    floor (scarcity, growth, speculation); it structurally cannot collapse
@@ -77,7 +77,7 @@ mitigations, stated without overselling:
 - **Renewable/own-generation power** lowers miners' real fiat cost and is the
   most durable structural answer.
 - **Framing:** miners are taking *cashback on compute the world is already
-  spending.* People already run AI constantly in daily life; DeAI lets that
+  spending.* People already run AI constantly in daily life; DAI lets that
   existing behavior pay some of it back. If adopted, some participants monetize
   what others simply pay for. That is the adoption story, and it is honest —
   it is a rebate on real activity, not a promise of free money.
@@ -242,7 +242,7 @@ self-check, §1).
 
 ## 7. Non-transferable until graduation
 
-DEAI is non-transferable (no DEX, no bridge) through all of testnet. The full
+DAI is non-transferable (no DEX, no bridge) through all of testnet. The full
 loop — redemption-rate setting, emission, vesting, bonding, slashing,
 attribution — runs with valueless tokens and zero attack incentive while
 parameters are tuned.
@@ -276,7 +276,7 @@ keys, sits in securities/regulatory territory in many jurisdictions.
 
 ## Chosen shape (one paragraph)
 
-DEAI is the network's economic medium, made real (not Ponzi) by a
+DAI is the network's economic medium, made real (not Ponzi) by a
 protocol-enforced invariant: it is always redeemable for inference at a rate
 that is transparently and verifiably determined, never at anyone's discretion.
 Inference is priced in compute units the token represents; volatility is

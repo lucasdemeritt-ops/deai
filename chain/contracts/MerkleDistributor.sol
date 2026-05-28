@@ -1,16 +1,16 @@
-// SPDX-License-Identifier: MIT
+﻿// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 
-interface IDeAIToken {
+interface IDAIToken {
     function mint(address to, uint256 amount) external;
 }
 
 /**
  * @title MerkleDistributor
- * @notice Claimable batch settlement of earned DEAI (build-now #4).
+ * @notice Claimable batch settlement of earned DAI (build-now #4).
  *
  * Instead of the orchestrator minting per task with a permanently-hot
  * MINTER_ROLE key, earnings accrue OFF-CHAIN. Once per epoch the orchestrator
@@ -33,18 +33,18 @@ interface IDeAIToken {
 contract MerkleDistributor is AccessControl {
     bytes32 public constant UPDATER_ROLE = keccak256("UPDATER_ROLE");
 
-    IDeAIToken public immutable token;
+    IDAIToken public immutable token;
     bytes32 public merkleRoot;
     uint256 public epoch;
 
-    /// @notice Cumulative DEAI (wei) already claimed per account.
+    /// @notice Cumulative DAI (wei) already claimed per account.
     mapping(address => uint256) public claimed;
 
     event RootUpdated(uint256 indexed epoch, bytes32 root);
     event Claimed(address indexed account, uint256 amount, uint256 cumulative);
 
     constructor(address tokenAddr, address updater) {
-        token = IDeAIToken(tokenAddr);
+        token = IDAIToken(tokenAddr);
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(UPDATER_ROLE, updater);
     }
@@ -56,8 +56,8 @@ contract MerkleDistributor is AccessControl {
         emit RootUpdated(epoch, newRoot);
     }
 
-    /// @notice Claim all DEAI earned to date for msg.sender.
-    /// @param cumulativeAmount total DEAI (wei) earned by msg.sender as of the
+    /// @notice Claim all DAI earned to date for msg.sender.
+    /// @param cumulativeAmount total DAI (wei) earned by msg.sender as of the
     ///        currently-published root.
     /// @param proof Merkle proof for msg.sender's leaf.
     function claim(uint256 cumulativeAmount, bytes32[] calldata proof) external {

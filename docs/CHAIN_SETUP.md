@@ -1,4 +1,4 @@
-# On-Chain Mode — Setup Guide
+﻿# On-Chain Mode — Setup Guide
 
 By default the orchestrator runs in **mock mode**: everything works with an in-memory ledger and no blockchain is needed. This is intentional — contributors and testers can run the full network without installing anything blockchain-related.
 
@@ -44,7 +44,7 @@ npx hardhat run scripts/deploy.js --network localhost
 The script prints the deployed addresses:
 
 ```
-DeAIToken:        0x5FbDB2315678afecb367f032d93F642f64180aa3
+DAIToken:        0x5FbDB2315678afecb367f032d93F642f64180aa3
 PaymentContract:  0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512
 SlashingContract: 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0
 ```
@@ -62,16 +62,16 @@ cp .env.example .env
 ```
 
 ```env
-DEAI_RPC_URL=http://localhost:8545
-DEAI_SLASHING_CONTRACT=0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0
-DEAI_PAYMENT_CONTRACT=0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512
-DEAI_TOKEN_CONTRACT=0x5FbDB2315678afecb367f032d93F642f64180aa3
-DEAI_DISTRIBUTOR_CONTRACT=0x<MerkleDistributor address from deploy.js output>
+DAI_RPC_URL=http://localhost:8545
+DAI_SLASHING_CONTRACT=0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0
+DAI_PAYMENT_CONTRACT=0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512
+DAI_TOKEN_CONTRACT=0x5FbDB2315678afecb367f032d93F642f64180aa3
+DAI_DISTRIBUTOR_CONTRACT=0x<MerkleDistributor address from deploy.js output>
 # Optional: seconds between reward-settlement epochs (default 3600)
-# DEAI_SETTLE_INTERVAL=3600
+# DAI_SETTLE_INTERVAL=3600
 
 # First Hardhat test account private key (pre-funded, safe for local dev only)
-DEAI_ORCHESTRATOR_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+DAI_ORCHESTRATOR_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 ```
 
 ---
@@ -112,7 +112,7 @@ themselves.
 
 Staking is **optional**. Any miner that has not been ejected is eligible to receive tasks (`isEligible` returns `!ejected` — there is no minimum-stake gate). Stake acts only as a protection buffer: a miner with stake absorbs a bad result instead of being ejected on the first one. You can run a node with no stake at all.
 
-If you specifically want to test the stake/slash path, mint yourself some DEAI and call `stake()` via the Hardhat console first; otherwise you can skip staking entirely.
+If you specifically want to test the stake/slash path, mint yourself some DAI and call `stake()` via the Hardhat console first; otherwise you can skip staking entirely.
 
 Start the node with its wallet address:
 
@@ -122,7 +122,7 @@ python compute/node.py --models llama3 --wallet 0x<MINER_WALLET_ADDRESS>
 
 Or set it in the environment:
 ```bash
-DEAI_WALLET=0x... python compute/node.py --models llama3
+DAI_WALLET=0x... python compute/node.py --models llama3
 ```
 
 Nodes without a wallet still work — they're just not tracked on-chain and won't appear in SlashingContract's reputation records.
@@ -135,7 +135,7 @@ The contracts are deployed on Ethereum Sepolia — you can point directly at the
 
 | Contract | Address |
 |---|---|
-| DeAIToken | [`0x5a57f19889E9Cd89b54fF77ADb3A49BDfdc6c2dF`](https://sepolia.etherscan.io/address/0x5a57f19889E9Cd89b54fF77ADb3A49BDfdc6c2dF) |
+| DAIToken | [`0x5a57f19889E9Cd89b54fF77ADb3A49BDfdc6c2dF`](https://sepolia.etherscan.io/address/0x5a57f19889E9Cd89b54fF77ADb3A49BDfdc6c2dF) |
 | PaymentContract | [`0xfcE94FdEf94AE90290e0c01BcaccCEe4ce88ed28`](https://sepolia.etherscan.io/address/0xfcE94FdEf94AE90290e0c01BcaccCEe4ce88ed28) |
 | SlashingContract | [`0xe030330AF5c60387F50a0bFd4d28eeCfA6aF022a`](https://sepolia.etherscan.io/address/0xe030330AF5c60387F50a0bFd4d28eeCfA6aF022a) |
 | MerkleDistributor | [`0xa40862db099ba7973E3062cC92fF0022FF030fb0`](https://sepolia.etherscan.io/address/0xa40862db099ba7973E3062cC92fF0022FF030fb0) |
@@ -143,11 +143,11 @@ The contracts are deployed on Ethereum Sepolia — you can point directly at the
 To run against the live testnet deployment, use the public Sepolia RPC (no account needed):
 
 ```env
-DEAI_RPC_URL=https://ethereum-sepolia.publicnode.com
-DEAI_TOKEN_CONTRACT=0x5a57f19889E9Cd89b54fF77ADb3A49BDfdc6c2dF
-DEAI_PAYMENT_CONTRACT=0xfcE94FdEf94AE90290e0c01BcaccCEe4ce88ed28
-DEAI_SLASHING_CONTRACT=0xe030330AF5c60387F50a0bFd4d28eeCfA6aF022a
-DEAI_DISTRIBUTOR_CONTRACT=0xa40862db099ba7973E3062cC92fF0022FF030fb0
+DAI_RPC_URL=https://ethereum-sepolia.publicnode.com
+DAI_TOKEN_CONTRACT=0x5a57f19889E9Cd89b54fF77ADb3A49BDfdc6c2dF
+DAI_PAYMENT_CONTRACT=0xfcE94FdEf94AE90290e0c01BcaccCEe4ce88ed28
+DAI_SLASHING_CONTRACT=0xe030330AF5c60387F50a0bFd4d28eeCfA6aF022a
+DAI_DISTRIBUTOR_CONTRACT=0xa40862db099ba7973E3062cC92fF0022FF030fb0
 ```
 
 To deploy your own instance (e.g. for testing contract changes):
@@ -166,6 +166,6 @@ To deploy your own instance (e.g. for testing contract changes):
 | Eligibility check | All nodes eligible | Any miner not ejected is eligible — stake is optional, **not** required |
 | Task completion | Increments in-memory counter | Accrues reward off-chain + calls `recordCompletion()` on-chain |
 | Reward settlement | In-memory balance only | Off-chain accrual → cumulative Merkle root per epoch via `MerkleDistributor`; miners claim (`GET /claim/<wallet>` → `claim()`) |
-| Bad results | Logged, no penalty | Calls `slash()` — burns up to 10 DEAI from stake; a miner with no stake is ejected on the first bad result |
+| Bad results | Logged, no penalty | Calls `slash()` — burns up to 10 DAI from stake; a miner with no stake is ejected on the first bad result |
 | Payment / escrow | Not implemented (rewards minted, not user-funded) | Not implemented (PaymentContract not wired; deferred) |
 | Requires blockchain | No | Yes |

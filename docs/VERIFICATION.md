@@ -1,4 +1,4 @@
-# DeAI — Verification Approach (Decision + Direction)
+﻿# DAI — Verification Approach (Decision + Direction)
 
 > Status: decision doc. The verification approach is the keystone the
 > economics, roadmap ordering, and chain choice all hang off of. Replaces the
@@ -119,8 +119,17 @@ All design / local-mock work, none blocked on testing:
 
 ## Deferred / open
 
-- Comparison-method choice (semantic threshold vs. judge model vs. logprob
-  agreement) — needs empirical testing.
+- ~~Comparison-method choice~~ **Decided** (VERIFICATION_PROTOCOL.md §4):
+  semantic embedding cosine similarity via `EmbeddingComparator`
+  (OpenAI-compatible `/v1/embeddings`). Logprob rejected (not universally
+  supported by Ollama). Judge model rejected (inference round-trip, recursion
+  risk). Threshold `T` remains empirical/testnet.
+- Reference inference stack: **designed** (VERIFICATION_PROTOCOL.md §9); not
+  yet built. This is the prerequisite for `RedundantExecutionVerifier` to be
+  used safely — without it, "two nodes disagree" is not a well-defined
+  statement.
+- Committee escalation: **designed** (VERIFICATION_PROTOCOL.md §10); not yet
+  built. The current code stops at `DISPUTED` (reject, flag, no slash).
 - Chain architecture: downstream of this decision. If verification stays
   off-chain (optimistic/TEE), a cheap EVM L2 / app-rollup suffices and a
   sovereign chain is a *want*, not a need. A sovereign chain is only

@@ -1,13 +1,13 @@
-// SPDX-License-Identifier: MIT
+﻿// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "./DeAIToken.sol";
+import "./DAIToken.sol";
 
 /**
  * @title SlashingContract
- * @notice Stake and reputation management for DeAI network miners.
+ * @notice Stake and reputation management for DAI network miners.
  *
  * Anyone can join and start earning — no stake required to participate.
  * Stake is optional but acts as a protection buffer: miners with stake
@@ -29,7 +29,7 @@ import "./DeAIToken.sol";
 contract SlashingContract is AccessControl, ReentrancyGuard {
     bytes32 public constant ORCHESTRATOR_ROLE = keccak256("ORCHESTRATOR_ROLE");
 
-    DeAIToken public immutable token;
+    DAIToken public immutable token;
 
     uint256 public constant MIN_STAKE    = 100 * 1e18;  // voluntary buffer floor
     uint256 public constant SLASH_AMOUNT = 10  * 1e18;  // burned per bad result
@@ -50,7 +50,7 @@ contract SlashingContract is AccessControl, ReentrancyGuard {
     event StakeWithdrawn(address indexed miner, uint256 amount);
 
     constructor(address tokenAddress, address orchestrator) {
-        token = DeAIToken(tokenAddress);
+        token = DAIToken(tokenAddress);
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(ORCHESTRATOR_ROLE, orchestrator);
     }

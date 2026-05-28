@@ -1,5 +1,5 @@
-/**
- * deploy.js — deploys DeAIToken, PaymentContract, SlashingContract
+﻿/**
+ * deploy.js — deploys DAIToken, PaymentContract, SlashingContract
  *
  * Usage:
  *   npx hardhat run scripts/deploy.js                     (local hardhat network)
@@ -7,9 +7,9 @@
  *   npx hardhat run scripts/deploy.js --network amoy      (Polygon Amoy testnet)
  *
  * After deployment the script wires up roles so that:
- *   PaymentContract   → MINTER_ROLE  on DeAIToken
- *   SlashingContract  → BURNER_ROLE  on DeAIToken
- *   MerkleDistributor → MINTER_ROLE  on DeAIToken (mints only what a
+ *   PaymentContract   → MINTER_ROLE  on DAIToken
+ *   SlashingContract  → BURNER_ROLE  on DAIToken
+ *   MerkleDistributor → MINTER_ROLE  on DAIToken (mints only what a
  *                       published cumulative root authorizes, on claim)
  *   Orchestrator      → UPDATER_ROLE on MerkleDistributor (publish roots)
  *
@@ -27,12 +27,12 @@ async function main() {
   console.log(`\nDeploying with account: ${deployer.address}`);
   console.log(`Balance: ${ethers.formatEther(await ethers.provider.getBalance(deployer.address))} ETH\n`);
 
-  // ── 1. DeAIToken ────────────────────────────────────────────────
-  const Token = await ethers.getContractFactory("DeAIToken");
+  // ── 1. DAIToken ────────────────────────────────────────────────
+  const Token = await ethers.getContractFactory("DAIToken");
   const token = await Token.deploy();
   await token.waitForDeployment();
   const tokenAddr = await token.getAddress();
-  console.log(`DeAIToken deployed:        ${tokenAddr}`);
+  console.log(`DAIToken deployed:        ${tokenAddr}`);
 
   // ── 2. PaymentContract ──────────────────────────────────────────
   // The orchestrator address is the deployer for local dev.
@@ -85,7 +85,7 @@ async function main() {
   Network:           ${conn.networkName}
   Orchestrator:      ${orchestratorAddr}
 
-  DeAIToken:         ${tokenAddr}
+  DAIToken:         ${tokenAddr}
   PaymentContract:   ${paymentAddr}
   SlashingContract:  ${slashingAddr}
   MerkleDistributor: ${distributorAddr}

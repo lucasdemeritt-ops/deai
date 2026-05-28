@@ -1,4 +1,4 @@
-# DeAI — The Actual Goal and the Path There
+﻿# DAI — The Actual Goal and the Path There
 
 > Status: direction doc. Records the intended end-state and the staged path to
 > it. This is *target*, deliberately separated from current state (see README
@@ -30,7 +30,7 @@ cuts the opposite way from intuition:
 
 So the faithful mapping of the analogy is **reward sharing among many
 contributors**, not "split one unit of work." Splitting the work itself is a
-real and separate thing — and it is much harder. DeAI's pitch (useful,
+real and separate thing — and it is much harder. DAI's pitch (useful,
 non-wasted compute) is the *opposite* of Bitcoin's intentional redundancy.
 
 ## Three real architectures for "many nodes contribute"
@@ -110,9 +110,9 @@ cost and centralization tradeoffs, specified in VERIFICATION_PROTOCOL.md §11.
 Captured here so it is not lost. This is the next to-do list, deliberately
 unanswered until we work it deliberately:
 
-1. **Supply policy.** What mints DEAI? Capped or uncapped? Emission tied to
+1. **Supply policy.** What mints DAI? Capped or uncapped? Emission tied to
    verified useful work *and* real demand, not unbounded.
-2. **Source of value.** What makes DEAI worth anything — is it required to pay
+2. **Source of value.** What makes DAI worth anything — is it required to pay
    for inference, or optional? Native token vs. stablecoin settlement for
    price-stable compute pricing.
 3. **Sybil cost.** A fresh wallet must not be a free identity. Mandatory
@@ -123,7 +123,7 @@ unanswered until we work it deliberately:
    split fairly *and verifiably* across N contributing nodes.
 6. **Admin-key sunset.** Concrete plan to renounce / timelock / govern the
    token `DEFAULT_ADMIN_ROLE` before any valued token exists.
-7. **Non-transferable until graduation.** Keep DEAI non-transferable (no DEX,
+7. **Non-transferable until graduation.** Keep DAI non-transferable (no DEX,
    no bridge) until verification + economics are proven, decoupling
    "persistent chain" from "real money."
 8. **Regulatory surface.** A token with market value carries legal/regulatory

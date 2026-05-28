@@ -1,5 +1,5 @@
-"""
-DeAI Earnings Ledger
+﻿"""
+DAI Earnings Ledger
 --------------------
 Tracks token balances and earnings history for every node.
 

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Orchestrator integration tests.
 
 Uses Starlette's TestClient for sync HTTP tests and httpx AsyncClient with
@@ -90,7 +90,7 @@ def test_root():
     with TestClient(app) as client:
         r = client.get("/")
     assert r.status_code == 200
-    assert r.json()["service"] == "DeAI Orchestrator"
+    assert r.json()["service"] == "DAI Orchestrator"
 
 
 def test_status_no_nodes():

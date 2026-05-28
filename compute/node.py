@@ -1,5 +1,5 @@
-"""
-DeAI Node Client
+﻿"""
+DAI Node Client
 ----------------
 What a miner runs to join the network.
 
@@ -73,7 +73,9 @@ async def ollama_resolve_model(requested: str, available: list[str]) -> str:
     Handles shorthand: 'qwen3' matches 'qwen3:8b', 'any' uses the first available.
     """
     if requested == "any":
-        return available[0] if available else "any"
+        # Embedding models don't support chat completions — skip them.
+        chat_models = [m for m in available if "embed" not in m.lower()]
+        return chat_models[0] if chat_models else (available[0] if available else "any")
 
     # Exact match first
     if requested in available:
@@ -105,8 +107,8 @@ async def run_mock_inference(model: str, messages: list, max_tokens: int, temper
     stable_seed = int(hashlib.md5(last_user_msg.encode()).hexdigest(), 16)
     rng = random.Random(stable_seed)
     responses = [
-        f"[{model} @ DeAI node] I've processed your request: \"{last_user_msg[:60]}{'...' if len(last_user_msg) > 60 else ''}\". This is a mock response — run with --ollama for real inference.",
-        f"[{model} @ DeAI node] Understood. You asked: \"{last_user_msg[:60]}{'...' if len(last_user_msg) > 60 else ''}\". In the full network, a real model would respond here.",
+        f"[{model} @ DAI node] I've processed your request: \"{last_user_msg[:60]}{'...' if len(last_user_msg) > 60 else ''}\". This is a mock response — run with --ollama for real inference.",
+        f"[{model} @ DAI node] Understood. You asked: \"{last_user_msg[:60]}{'...' if len(last_user_msg) > 60 else ''}\". In the full network, a real model would respond here.",
     ]
     content = rng.choice(responses)
     return content, len(content.split()) + len(last_user_msg.split())
@@ -260,7 +262,7 @@ async def run_node(orchestrator_url: str, node_info: NodeInfo, use_ollama: bool,
 # ── CLI entry point ───────────────────────────────────────────────────────────
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="DeAI Node Client — join the network and earn by sharing compute.")
+    parser = argparse.ArgumentParser(description="DAI Node Client — join the network and earn by sharing compute.")
     parser.add_argument("--orchestrator", default="ws://localhost:8000/ws/node")
     parser.add_argument("--models", default=None, help="Comma-separated model names (default: auto-detect from Ollama, or 'any' in mock mode)")
     parser.add_argument("--gpu", action="store_true")
@@ -270,8 +272,8 @@ def parse_args():
     parser.add_argument("--ollama", action="store_true", help="Enable real inference via Ollama")
     parser.add_argument("--ollama-url", default="http://localhost:11434", help="Ollama API URL")
     parser.add_argument("--auto", action="store_true", help="Auto-detect installed Ollama models and advertise them")
-    parser.add_argument("--wallet", default=os.getenv("DEAI_WALLET"), help="EVM wallet address for on-chain rewards (optional in mock mode)")
-    parser.add_argument("--project", default=os.getenv("DEAI_PROJECT"), help="Dedicate this node to a specific project (only receives tasks tagged with this project)")
+    parser.add_argument("--wallet", default=os.getenv("DAI_WALLET"), help="EVM wallet address for on-chain rewards (optional in mock mode)")
+    parser.add_argument("--project", default=os.getenv("DAI_PROJECT"), help="Dedicate this node to a specific project (only receives tasks tagged with this project)")
     return parser.parse_args()
 
 

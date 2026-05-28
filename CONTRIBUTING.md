@@ -1,6 +1,6 @@
-# Contributing to DeAI
+﻿# Contributing to DAI
 
-Thanks for your interest. DeAI is an early-stage open source project and contributions of any kind are welcome — code, bug reports, docs, and ideas.
+Thanks for your interest. DAI is an early-stage open source project and contributions of any kind are welcome — code, bug reports, docs, and ideas.
 
 ## Before you start
 
@@ -21,8 +21,8 @@ Read [docs/SECURITY.md](docs/SECURITY.md). The rules there are non-negotiable. P
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/lucasdemeritt-ops/deai.git
-cd deai
+git clone https://github.com/lucasdemeritt-ops/dai.git
+cd dai
 pip install -r requirements.txt
 ```
 
@@ -51,7 +51,7 @@ python compute/node.py --ollama --auto
 Open a third terminal:
 
 ```bash
-python test_request.py --message "Hello from DeAI"
+python test_request.py --message "Hello from DAI"
 
 # Check connected nodes and earnings
 python test_request.py --status
@@ -98,7 +98,7 @@ npx hardhat run scripts/deploy.js   # deploys to local Hardhat network
 ## Project structure
 
 ```
-deai/
+dai/
 ├── protocol/
 │   ├── orchestrator.py     # Network brain — WebSocket hub, task dispatch, REST API
 │   ├── ledger.py           # In-memory token ledger
@@ -112,7 +112,7 @@ deai/
 ├── shared/
 │   └── schemas.py          # Pydantic models shared across layers
 ├── chain/
-│   ├── contracts/          # Solidity smart contracts (DeAIToken, PaymentContract, SlashingContract, MerkleDistributor)
+│   ├── contracts/          # Solidity smart contracts (DAIToken, PaymentContract, SlashingContract, MerkleDistributor)
 │   ├── abis/               # Compiled ABIs for Python-side contract calls
 │   ├── test/               # Contract test suite (Mocha + Hardhat v3)
 │   └── scripts/            # Deployment scripts

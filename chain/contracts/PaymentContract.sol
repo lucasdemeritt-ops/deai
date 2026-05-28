@@ -1,13 +1,13 @@
-// SPDX-License-Identifier: MIT
+﻿// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "./DeAIToken.sol";
+import "./DAIToken.sol";
 
 /**
  * @title PaymentContract
- * @notice Escrow and reward logic for the DeAI network.
+ * @notice Escrow and reward logic for the DAI network.
  *
  * Flow:
  *   1. User calls depositAndRequest() with a token amount and task hash.
@@ -28,7 +28,7 @@ import "./DeAIToken.sol";
 contract PaymentContract is AccessControl, ReentrancyGuard {
     bytes32 public constant ORCHESTRATOR_ROLE = keccak256("ORCHESTRATOR_ROLE");
 
-    DeAIToken public immutable token;
+    DAIToken public immutable token;
 
     // Flat miner bonus minted on top of the user's payment (in token units, 18 decimals)
     uint256 public constant MINER_BONUS = 10 * 1e18;
@@ -51,7 +51,7 @@ contract PaymentContract is AccessControl, ReentrancyGuard {
     event TaskRefunded(bytes32 indexed taskId, address indexed user, uint256 amount);
 
     constructor(address tokenAddress, address orchestrator) {
-        token = DeAIToken(tokenAddress);
+        token = DAIToken(tokenAddress);
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(ORCHESTRATOR_ROLE, orchestrator);
     }

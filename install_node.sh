@@ -1,5 +1,5 @@
-#!/usr/bin/env bash
-# DeAI Node Installer — Linux / macOS
+﻿#!/usr/bin/env bash
+# DAI Node Installer — Linux / macOS
 # Run from the repo root:
 #   chmod +x install_node.sh && ./install_node.sh
 
@@ -12,7 +12,7 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 echo ""
-echo -e "  ${CYAN}DeAI Node Installer${NC}"
+echo -e "  ${CYAN}DAI Node Installer${NC}"
 echo "  Earn tokens by sharing your GPU or CPU for AI inference."
 echo ""
 
