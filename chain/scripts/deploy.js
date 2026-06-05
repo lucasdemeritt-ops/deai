@@ -1,4 +1,4 @@
-﻿/**
+/**
  * deploy.js — deploys DAIToken, PaymentContract, SlashingContract
  *
  * Usage:

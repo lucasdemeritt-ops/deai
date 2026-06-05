@@ -1,4 +1,4 @@
-﻿# DAI Security Principles
+# DAI Security Principles
 
 These are non-negotiable design rules. Every contributor must read this before touching the codebase. Every feature must be evaluated against these principles before it ships.
 

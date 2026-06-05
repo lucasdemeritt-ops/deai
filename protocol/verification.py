@@ -1,4 +1,4 @@
-﻿"""
+"""
 DAI Verification
 -----------------
 The keystone seam. Replaces the old `mock_verify` non-empty check with a

@@ -1,4 +1,4 @@
-﻿# DAI — Optimistic Verification Protocol (Spec)
+# DAI — Optimistic Verification Protocol (Spec)
 
 > Status: spec doc. This is build-now item #1 from
 > [VERIFICATION.md](VERIFICATION.md) — the full specification of the **Standard

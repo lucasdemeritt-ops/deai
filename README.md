@@ -1,4 +1,4 @@
-﻿# DAI — Decentralized AI Network
+# DAI — Decentralized AI Network
 
 [![CI](https://github.com/lucasdemeritt-ops/dai/actions/workflows/ci.yml/badge.svg)](https://github.com/lucasdemeritt-ops/dai/actions/workflows/ci.yml)
 

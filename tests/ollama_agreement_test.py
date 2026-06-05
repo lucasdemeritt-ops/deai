@@ -1,4 +1,4 @@
-﻿"""
+"""
 Two-node Ollama agreement test.
 
 Fires a batch of prompts across three categories (factual, explanatory,

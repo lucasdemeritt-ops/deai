@@ -1,4 +1,4 @@
-﻿"""
+"""
 Quick test — send chat requests to the DAI network.
 
 Usage:

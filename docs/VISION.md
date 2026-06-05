@@ -1,4 +1,4 @@
-﻿# DAI — The Actual Goal and the Path There
+# DAI — The Actual Goal and the Path There
 
 > Status: direction doc. Records the intended end-state and the staged path to
 > it. This is *target*, deliberately separated from current state (see README

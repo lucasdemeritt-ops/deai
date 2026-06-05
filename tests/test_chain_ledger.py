@@ -1,4 +1,4 @@
-﻿"""
+"""
 Unit tests for protocol/chain_ledger.py.
 
 Web3 and all contract calls are mocked — no RPC node, no Sepolia, no keys.

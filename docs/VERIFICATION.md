@@ -1,4 +1,4 @@
-﻿# DAI — Verification Approach (Decision + Direction)
+# DAI — Verification Approach (Decision + Direction)
 
 > Status: decision doc. The verification approach is the keystone the
 > economics, roadmap ordering, and chain choice all hang off of. Replaces the

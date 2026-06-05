@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 # DAI Node Installer — Linux / macOS
 # Run from the repo root:
 #   chmod +x install_node.sh && ./install_node.sh

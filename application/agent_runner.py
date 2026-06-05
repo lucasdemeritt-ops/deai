@@ -1,4 +1,4 @@
-﻿"""
+"""
 DAI Persistent Agent Runner
 -----------------------------
 Runs a long-lived AI agent funded by a DAI token budget. The agent

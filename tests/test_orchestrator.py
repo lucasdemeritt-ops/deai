@@ -1,4 +1,4 @@
-﻿"""
+"""
 Orchestrator integration tests.
 
 Uses Starlette's TestClient for sync HTTP tests and httpx AsyncClient with

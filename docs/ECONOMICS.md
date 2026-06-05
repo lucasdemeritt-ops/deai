@@ -1,4 +1,4 @@
-﻿# DAI — Economics (Mapped Direction)
+# DAI — Economics (Mapped Direction)
 
 > Status: direction doc. The token model is **decided** (see First Principle
 > and §1). Recommended mechanics with honest tradeoffs; empirical parameters

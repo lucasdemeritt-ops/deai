@@ -1,4 +1,4 @@
-﻿"""
+"""
 DAI Node Client
 ----------------
 What a miner runs to join the network.

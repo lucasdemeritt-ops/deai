@@ -1,4 +1,4 @@
-﻿# On-Chain Mode — Setup Guide
+# On-Chain Mode — Setup Guide
 
 By default the orchestrator runs in **mock mode**: everything works with an in-memory ledger and no blockchain is needed. This is intentional — contributors and testers can run the full network without installing anything blockchain-related.
 

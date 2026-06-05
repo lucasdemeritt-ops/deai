@@ -1,4 +1,4 @@
-﻿# DAI Node Installer — Windows
+# DAI Node Installer — Windows
 # Run from the repo root in PowerShell:
 #   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 #   .\install_node.ps1

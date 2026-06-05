@@ -1,4 +1,4 @@
-﻿import { expect } from "chai";
+import { expect } from "chai";
 import hre from "hardhat";
 
 // Tree built with the SAME convention as MerkleDistributor.sol and

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Check a miner's on-chain status in SlashingContract.
 
 Usage:

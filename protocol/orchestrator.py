@@ -1,4 +1,4 @@
-﻿"""
+"""
 DAI Orchestrator
 -----------------
 The network brain. Responsibilities:

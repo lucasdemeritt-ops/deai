@@ -1,4 +1,4 @@
-﻿"""
+"""
 ChainLedger — on-chain reward and reputation tracking.
 
 Wraps the in-memory Ledger with real contract calls. When a task completes,
@@ -48,7 +48,7 @@ _WEI = 10 ** 18
 
 
 def _load_abi(name: str) -> list:
-    with open(_ABI_DIR / f"{name}.json") as f:
+    with open(_ABI_DIR / f"{name}.json", encoding="utf-8-sig") as f:
         return json.load(f)
 
 

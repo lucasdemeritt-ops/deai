@@ -1,4 +1,4 @@
-﻿# Contributing to DAI
+# Contributing to DAI
 
 Thanks for your interest. DAI is an early-stage open source project and contributions of any kind are welcome — code, bug reports, docs, and ideas.
 
