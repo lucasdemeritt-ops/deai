@@ -17,9 +17,10 @@ import httpx
 from httpx import ASGITransport
 
 import orchestrator as orc
-from orchestrator import app, nodes, results, pending_events, stats, ledger
+from orchestrator import app, nodes, results, pending_events, stats, ledger, model_registry
 import orchestrator
 from shared.schemas import NodeInfo, NodeStatus, TaskResult
+from model_registry import ModelStack
 
 
 # ── Mock node helpers ──────────────────────────────────────────────────────────
@@ -32,11 +33,13 @@ class _MockWS:
     def __init__(self, node_id: str, response: str):
         self._node_id = node_id
         self._response = response
+        self.last_payload: dict | None = None  # captured on each task dispatch
 
     async def send_text(self, data: str):
         msg = json.loads(data)
         if msg.get("type") != "task":
             return
+        self.last_payload = msg["payload"]
         task_id = msg["payload"]["task_id"]
 
         async def _resolve():
@@ -76,12 +79,14 @@ def reset():
     stats["completed"] = 0
     stats["failed"] = 0
     ledger._balances.clear()
+    model_registry._stacks.clear()
     orchestrator._api_key = None
     orchestrator.chain_ledger = None
     yield
     nodes.clear()
     results.clear()
     pending_events.clear()
+    model_registry._stacks.clear()
 
 
 # ── Sync HTTP: simple endpoints ────────────────────────────────────────────────
@@ -232,3 +237,55 @@ async def test_node_goes_idle_after_task():
     await _post({"model": "llama3", "messages": [{"role": "user", "content": "hi"}]})
     assert conn.status == NodeStatus.idle
     assert conn.tasks_completed == 1
+
+
+# ── Registry-gated verifier / seed injection (§12) ───────────────────────────
+
+def _register(model_id: str = "qwen3:8b", seed: int = 42):
+    model_registry.register(ModelStack(
+        model_id=model_id, runtime="ollama>=0.6.0",
+        temperature=0.0, seed=seed,
+    ))
+
+
+async def test_seed_injected_when_stack_registered():
+    """Dispatch payload must carry the registered seed when a stack is registered."""
+    _register(seed=77)
+    conn = _add_node("n1", ["qwen3:8b"], "Deterministic answer.")
+    await _post({"model": "qwen3:8b", "messages": [{"role": "user", "content": "hi"}]})
+    assert conn.ws.last_payload is not None
+    assert conn.ws.last_payload["seed"] == 77
+    assert conn.ws.last_payload["temperature"] == 0.0
+
+
+async def test_no_seed_when_stack_not_registered():
+    """Dispatch payload must carry seed=None for unregistered models."""
+    conn = _add_node("n1", ["llama3"], "Generic answer.")
+    await _post({"model": "llama3", "messages": [{"role": "user", "content": "hi"}]})
+    assert conn.ws.last_payload is not None
+    assert conn.ws.last_payload["seed"] is None
+
+
+async def test_stack_overrides_request_temperature():
+    """User-supplied temperature must be ignored when the model has a registered stack."""
+    _register(seed=42)
+    conn = _add_node("n1", ["qwen3:8b"], "Answer.")
+    # Request explicitly sends temperature=0.9 — the stack should clamp it to 0.
+    await _post({
+        "model": "qwen3:8b",
+        "messages": [{"role": "user", "content": "hi"}],
+        "temperature": 0.9,
+    })
+    assert conn.ws.last_payload["temperature"] == 0.0
+
+
+async def test_round_trip_with_registered_stack():
+    """End-to-end: a registered model still returns a valid 200 response."""
+    _register(seed=42)
+    _add_node("n1", ["qwen3:8b"], "Registry-verified response.")
+    r = await _post({
+        "model": "qwen3:8b",
+        "messages": [{"role": "user", "content": "hello"}],
+    })
+    assert r.status_code == 200
+    assert r.json()["choices"][0]["message"]["content"] == "Registry-verified response."

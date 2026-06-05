@@ -67,7 +67,8 @@ from shared.schemas import (
     WSMessage,
 )
 from ledger import Ledger
-from verification import Verifier, ContentVerifier, make_verifier
+from verification import Verifier, ContentVerifier, RedundantExecutionVerifier, make_verifier
+from model_registry import ModelRegistry, ModelStack
 
 logging.basicConfig(
     level=logging.INFO,
@@ -147,6 +148,11 @@ ledger = Ledger()
 # recheck) so mock mode and CI are unchanged. --verify-sample-rate swaps in the
 # optimistic redundant-execution verifier. See docs/VERIFICATION.md.
 verifier: Verifier = ContentVerifier()
+
+# Reference inference stack registry (VERIFICATION_PROTOCOL.md §12).
+# Models without a registered stack always run ContentVerifier regardless of
+# --verify-sample-rate.  Register stacks via POST /admin/model-registry.
+model_registry: ModelRegistry = ModelRegistry()
 
 
 # ── Routing ───────────────────────────────────────────────────────────────────
@@ -363,6 +369,7 @@ async def _dispatch_and_wait(
             "messages": [m.model_dump() for m in task.messages],
             "max_tokens": task.max_tokens,
             "temperature": task.temperature,
+            "seed": task.seed,  # None if no registered stack; node ignores None
         }
     }
     await node.ws.send_text(json.dumps(dispatch_msg))
@@ -400,13 +407,31 @@ def _slash_for_bad_result(node: NodeConnection, reason: str) -> None:
 async def chat_completions(req: ChatRequest, _auth=Depends(_check_api_key)):
     stats["requests"] += 1
 
+    # Apply registered stack parameters if this model has one (§12.4).
+    # temperature=0 and the registered seed override the request values so both
+    # primary and checker run identically — required for comparison to be valid.
+    stack = model_registry.get(req.model)
     task = Task(
         model=req.model,
         messages=req.messages,
         max_tokens=req.max_tokens if req.max_tokens is not None else 512,
-        temperature=req.temperature if req.temperature is not None else 0.7,
+        temperature=stack.temperature if stack else (req.temperature if req.temperature is not None else 0.7),
+        seed=stack.seed if stack else None,
         project=req.project,
     )
+
+    # Registry-gated verifier selection (§12.5): only registered+eligible models
+    # use the Standard-tier verifier; all others fall back to ContentVerifier.
+    if model_registry.is_eligible(task.model):
+        effective_verifier: Verifier = verifier
+    else:
+        if isinstance(verifier, RedundantExecutionVerifier):
+            log.info(
+                f"Model '{task.model}' has no registered stack — "
+                "falling back to ContentVerifier. "
+                "Register via POST /admin/model-registry to enable Standard-tier verification."
+            )
+        effective_verifier = ContentVerifier()
 
     log.info(f"Request recv  id={task.task_id}  model={req.model}  nodes_online={len(nodes)}")
 
@@ -422,14 +447,14 @@ async def chat_completions(req: ChatRequest, _auth=Depends(_check_api_key)):
         raise HTTPException(status_code=504, detail="Node did not respond in time.")
 
     # Cheap local gate — replaces the old mock_verify non-empty check.
-    if not verifier.well_formed(primary):
+    if not effective_verifier.well_formed(primary):
         stats["failed"] += 1
         _slash_for_bad_result(primary_node, "malformed/empty result")
         raise HTTPException(status_code=500, detail="Task result failed verification.")
 
     # Optimistic redundant check (Standard tier, docs/VERIFICATION.md). Sampled
     # and silent: the node is not told it is being checked.
-    if verifier.should_recheck(task, primary):
+    if effective_verifier.should_recheck(task, primary):
         shadow = Task(
             model=task.model,
             messages=task.messages,
@@ -439,13 +464,13 @@ async def chat_completions(req: ChatRequest, _auth=Depends(_check_api_key)):
         r2, n2, s2 = await _dispatch_and_wait(
             shadow, exclude={primary_node.info.node_id}
         )
-        if s2 != "ok" or not verifier.well_formed(r2):
+        if s2 != "ok" or not effective_verifier.well_formed(r2):
             # No independent checker free — cannot verify. Accept optimistically
             # rather than punish a provider for a thin network; record that this
             # task went unverified.
             log.warning(f"VERIFY skip   id={task.task_id}  reason=no-checker-available")
         else:
-            outcome = verifier.compare(task, primary, r2)
+            outcome = effective_verifier.compare(task, primary, r2)
             log.info(
                 f"VERIFY {'OK ' if outcome.accepted else 'MISMATCH'}  "
                 f"id={task.task_id}  primary={primary_node.info.node_id}  "
@@ -591,6 +616,64 @@ async def claim_post(wallet: str, body: _ClaimSubmit):
     except Exception as e:
         log.error(f"Claim broadcast failed  wallet={wallet}  err={e}")
         raise HTTPException(status_code=400, detail=f"Broadcast failed: {e}")
+
+
+# ── Admin: Reference Inference Stack Registry (VERIFICATION_PROTOCOL.md §12) ──
+
+class _StackRegisterRequest(BaseModel):
+    model_id: str
+    runtime: str
+    format: str = ""
+    temperature: float = 0.0
+    seed: int
+    max_tokens: int = 2048
+    stop_tokens: list = []
+    system_prompt: str = ""
+    digest: str = ""
+    registered_by: str = ""
+
+
+@app.get("/admin/model-registry")
+def list_model_registry(_auth=Depends(_check_api_key)):
+    """List all registered reference inference stacks."""
+    return {"stacks": [s.to_dict() for s in model_registry.all_stacks()]}
+
+
+@app.post("/admin/model-registry", status_code=201)
+def register_model_stack(req: _StackRegisterRequest, _auth=Depends(_check_api_key)):
+    """
+    Register a reference inference stack for a model (§12.3).
+
+    Once registered, tasks for this model will have temperature and seed
+    overridden by the stack values, and will be eligible for Standard-tier
+    (RedundantExecutionVerifier) verification when --verify-sample-rate > 0.
+    """
+    stack = ModelStack(
+        model_id=req.model_id,
+        runtime=req.runtime,
+        format=req.format,
+        temperature=req.temperature,
+        seed=req.seed,
+        max_tokens=req.max_tokens,
+        stop_tokens=req.stop_tokens,
+        system_prompt=req.system_prompt,
+        digest=req.digest,
+        registered_by=req.registered_by,
+    )
+    try:
+        model_registry.register(stack)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    return {"registered": stack.to_dict()}
+
+
+@app.get("/admin/model-registry/{model_id}")
+def get_model_stack(model_id: str, _auth=Depends(_check_api_key)):
+    """Get the registered stack for a specific model."""
+    stack = model_registry.get(model_id)
+    if stack is None:
+        raise HTTPException(status_code=404, detail=f"No stack registered for '{model_id}'")
+    return stack.to_dict()
 
 
 @app.get("/")

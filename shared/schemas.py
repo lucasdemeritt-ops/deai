@@ -34,6 +34,7 @@ class Task(BaseModel):
     messages: List[Message]
     max_tokens: int = 512
     temperature: float = 0.7
+    seed: Optional[int] = None        # set by orchestrator when model has a registered stack
     submitted_at: float = Field(default_factory=lambda: __import__('time').time())
     project: Optional[str] = None  # inherited from ChatRequest.project
 

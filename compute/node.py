@@ -121,10 +121,11 @@ async def run_ollama_inference(
     temperature: float,
     ollama_url: str,
     available_models: list[str],
+    seed: int | None = None,
 ) -> tuple[str, int]:
     """Real inference via Ollama's OpenAI-compatible API."""
     resolved = await ollama_resolve_model(model, available_models)
-    log.info(f"Ollama running  model={resolved}")
+    log.info(f"Ollama running  model={resolved}  seed={seed}")
 
     request_body = {
         "model": resolved,
@@ -136,6 +137,8 @@ async def run_ollama_inference(
         # context window, leaving nothing for the actual answer.
         "think": False,
     }
+    if seed is not None:
+        request_body["seed"] = seed
 
     async with httpx.AsyncClient(timeout=180.0) as client:
         resp = await client.post(
@@ -210,13 +213,14 @@ async def run_node(orchestrator_url: str, node_info: NodeInfo, use_ollama: bool,
                             messages = payload["messages"]
                             max_tokens = payload.get("max_tokens", 512)
                             temperature = payload.get("temperature", 0.7)
+                            seed = payload.get("seed")  # None unless model has a registered stack
 
-                            log.info(f"Task received  id={task_id}  model={model}  messages={len(messages)}")
+                            log.info(f"Task received  id={task_id}  model={model}  messages={len(messages)}  seed={seed}")
 
                             try:
                                 if use_ollama:
                                     content, tokens_used = await run_ollama_inference(
-                                        model, messages, max_tokens, temperature, ollama_url, available_models
+                                        model, messages, max_tokens, temperature, ollama_url, available_models, seed=seed
                                     )
                                 else:
                                     content, tokens_used = await run_mock_inference(
