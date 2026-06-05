@@ -56,8 +56,29 @@ def send_task(endpoint: str, model: str, prompt: str, api_key: str | None) -> di
 
 
 def load_prompts(prompt_file: str) -> list[str]:
-    with open(prompt_file) as f:
-        return [line.strip() for line in f if line.strip()]
+    try:
+        with open(prompt_file, encoding="utf-8-sig") as f:
+            return [line.strip() for line in f if line.strip()]
+    except UnicodeDecodeError:
+        with open(prompt_file, encoding="utf-16") as f:
+            return [line.strip() for line in f if line.strip()]
+
+
+_504_BACKOFFS = (5, 15, 45)  # seconds between retries on 504
+
+
+def _send_with_retry(endpoint: str, model: str, prompt: str, api_key: str | None) -> dict:
+    """Wrap send_task with exponential backoff on 504 (node busy / timeout)."""
+    for attempt, wait in enumerate(_504_BACKOFFS, start=1):
+        try:
+            return send_task(endpoint, model, prompt, api_key)
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code != 504:
+                raise
+            print(f"  [504] nodes busy — retry {attempt}/{len(_504_BACKOFFS)} in {wait}s...")
+            time.sleep(wait)
+    # Final attempt — let any exception propagate to the caller
+    return send_task(endpoint, model, prompt, api_key)
 
 
 def run(args):
@@ -116,7 +137,7 @@ def run(args):
 
             try:
                 start   = time.time()
-                result  = send_task(endpoint, model, prompt, api_key)
+                result  = _send_with_retry(endpoint, model, prompt, api_key)
                 elapsed = time.time() - start
 
                 content = result["choices"][0]["message"]["content"]
