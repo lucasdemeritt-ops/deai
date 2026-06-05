@@ -137,3 +137,79 @@ def test_cheating_node_is_caught_and_escalates():
 def test_verifier_is_abstract():
     with pytest.raises(TypeError):
         Verifier()  # cannot instantiate the interface directly
+
+
+# ── Threshold boundary calibration (#10, default threshold = 0.85) ────────────
+#
+# Static string pairs that bracket the 0.85 boundary. Acts as a canary if the
+# threshold or comparator algorithm changes without intent.
+
+_THRESHOLD = 0.85
+
+
+class TestThresholdBoundary:
+    def setup_method(self):
+        self.v = RedundantExecutionVerifier(sample_rate=1.0, agreement_threshold=_THRESHOLD)
+
+    # ── Pairs that should PASS (score >= 0.85) ────────────────────────────────
+
+    def test_identical_strings_pass(self):
+        a = "The capital of France is Paris."
+        outcome = self.v.compare(_task(), _result(a, "n1"), _result(a, "n2"))
+        assert outcome.accepted
+        assert outcome.agreement == pytest.approx(1.0)
+
+    def test_minor_punctuation_difference_passes(self):
+        a = "The capital of France is Paris."
+        b = "The capital of France is Paris"   # no trailing period
+        score = default_comparator(a, b)
+        assert score >= _THRESHOLD, f"Expected >= {_THRESHOLD}, got {score:.3f}"
+        outcome = self.v.compare(_task(), _result(a, "n1"), _result(b, "n2"))
+        assert outcome.accepted
+
+    def test_trivial_capitalisation_difference_passes(self):
+        a = "Python was created in 1991 by Guido van Rossum."
+        b = "Python was created in 1991 by Guido Van Rossum."
+        score = default_comparator(a, b)
+        assert score >= _THRESHOLD, f"Expected >= {_THRESHOLD}, got {score:.3f}"
+        outcome = self.v.compare(_task(), _result(a, "n1"), _result(b, "n2"))
+        assert outcome.accepted
+
+    # ── Pairs that should FAIL (score < 0.85) ────────────────────────────────
+
+    def test_completely_different_content_fails(self):
+        a = "The capital of France is Paris."
+        b = "Machine learning is a subset of artificial intelligence."
+        score = default_comparator(a, b)
+        assert score < _THRESHOLD, f"Expected < {_THRESHOLD}, got {score:.3f}"
+        outcome = self.v.compare(_task(), _result(a, "n1"), _result(b, "n2"))
+        assert not outcome.accepted
+        assert outcome.escalation_required
+
+    def test_partial_answer_vs_full_answer_fails(self):
+        a = "Python is a high-level, interpreted programming language known for its readability."
+        b = "Python."
+        score = default_comparator(a, b)
+        assert score < _THRESHOLD, f"Expected < {_THRESHOLD}, got {score:.3f}"
+        outcome = self.v.compare(_task(), _result(a, "n1"), _result(b, "n2"))
+        assert not outcome.accepted
+
+    def test_empty_vs_nonempty_fails(self):
+        a = "The answer is 42."
+        outcome = self.v.compare(_task(), _result(a, "n1"), _result("", "n2"))
+        assert not outcome.accepted
+
+    # ── Threshold is configurable ─────────────────────────────────────────────
+
+    def test_custom_threshold_lower_accepts_more(self):
+        a = "The capital of France is Paris."
+        b = "Paris is the capital city of France, located in northern Europe."
+        permissive = RedundantExecutionVerifier(sample_rate=1.0, agreement_threshold=0.3)
+        assert permissive.compare(_task(), _result(a, "n1"), _result(b, "n2")).accepted
+
+    def test_strict_threshold_rejects_near_matches(self):
+        a = "The capital of France is Paris."
+        b = "The capital of France is Paris"   # no period
+        strict = RedundantExecutionVerifier(sample_rate=1.0, agreement_threshold=1.0)
+        outcome = strict.compare(_task(), _result(a, "n1"), _result(b, "n2"))
+        assert not outcome.accepted

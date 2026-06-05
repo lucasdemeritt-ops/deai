@@ -18,7 +18,7 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "application"))
 
 import agent_runner
-from agent_runner import load_prompts, run, send_task, ESTIMATED_COST_PER_TASK
+from agent_runner import load_prompts, run, send_task, _send_with_retry, _504_BACKOFFS, ESTIMATED_COST_PER_TASK
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -59,6 +59,103 @@ def test_load_prompts_skips_blank_lines(tmp_path):
     f = tmp_path / "prompts.txt"
     f.write_text("\n\nOnly line\n\n")
     assert load_prompts(str(f)) == ["Only line"]
+
+
+def test_load_prompts_utf8_bom(tmp_path):
+    # UTF-8 BOM (EF BB BF) — written by PowerShell [System.IO.File]::WriteAllText
+    path = tmp_path / "prompts.txt"
+    path.write_bytes(b"\xef\xbb\xbfWhat is Python?\nName three languages.\n")
+    prompts = load_prompts(str(path))
+    assert prompts[0] == "What is Python?", f"BOM leaked into first prompt: {prompts[0]!r}"
+    assert prompts[1] == "Name three languages."
+
+
+def test_load_prompts_utf16_le(tmp_path):
+    # UTF-16 LE with BOM — written by PowerShell Out-File / > redirect on Windows
+    path = tmp_path / "prompts.txt"
+    path.write_bytes("What is Python?\nName three languages.\n".encode("utf-16"))
+    prompts = load_prompts(str(path))
+    assert prompts == ["What is Python?", "Name three languages."]
+
+
+# ── _send_with_retry ──────────────────────────────────────────────────────────
+
+def _make_http_error(status: int) -> httpx.HTTPStatusError:
+    req = httpx.Request("POST", "http://localhost:8000/v1/chat/completions")
+    resp = httpx.Response(status, request=req)
+    return httpx.HTTPStatusError(str(status), request=req, response=resp)
+
+
+def test_send_with_retry_succeeds_first_try():
+    with patch("agent_runner.send_task", return_value=_response()) as mock:
+        result = _send_with_retry("http://localhost:8000", "llama3", "hi", None)
+    assert result == _response()
+    assert mock.call_count == 1
+
+
+def test_send_with_retry_retries_on_504(monkeypatch):
+    calls = iter([_make_http_error(504), _make_http_error(504), _response()])
+
+    def fake_send(*args, **kwargs):
+        val = next(calls)
+        if isinstance(val, Exception):
+            raise val
+        return val
+
+    monkeypatch.setattr("agent_runner.send_task", fake_send)
+    monkeypatch.setattr("agent_runner.time.sleep", lambda s: None)
+    result = _send_with_retry("http://localhost:8000", "llama3", "hi", None)
+    assert result["choices"][0]["message"]["content"] == "Mock response."
+
+
+def test_send_with_retry_exhausts_all_attempts(monkeypatch):
+    call_count = {"n": 0}
+
+    def fake_send(*args, **kwargs):
+        call_count["n"] += 1
+        raise _make_http_error(504)
+
+    monkeypatch.setattr("agent_runner.send_task", fake_send)
+    monkeypatch.setattr("agent_runner.time.sleep", lambda s: None)
+
+    with pytest.raises(httpx.HTTPStatusError) as exc_info:
+        _send_with_retry("http://localhost:8000", "llama3", "hi", None)
+
+    assert exc_info.value.response.status_code == 504
+    assert call_count["n"] == len(_504_BACKOFFS) + 1  # retries + final attempt
+
+
+def test_send_with_retry_non_504_raises_immediately(monkeypatch):
+    call_count = {"n": 0}
+
+    def fake_send(*args, **kwargs):
+        call_count["n"] += 1
+        raise _make_http_error(500)
+
+    monkeypatch.setattr("agent_runner.send_task", fake_send)
+    monkeypatch.setattr("agent_runner.time.sleep", lambda s: None)
+
+    with pytest.raises(httpx.HTTPStatusError) as exc_info:
+        _send_with_retry("http://localhost:8000", "llama3", "hi", None)
+
+    assert exc_info.value.response.status_code == 500
+    assert call_count["n"] == 1  # no retries for non-504
+
+
+def test_send_with_retry_503_raises_immediately(monkeypatch):
+    call_count = {"n": 0}
+
+    def fake_send(*args, **kwargs):
+        call_count["n"] += 1
+        raise _make_http_error(503)
+
+    monkeypatch.setattr("agent_runner.send_task", fake_send)
+    monkeypatch.setattr("agent_runner.time.sleep", lambda s: None)
+
+    with pytest.raises(httpx.HTTPStatusError):
+        _send_with_retry("http://localhost:8000", "llama3", "hi", None)
+
+    assert call_count["n"] == 1
 
 
 # ── send_task ──────────────────────────────────────────────────────────────────

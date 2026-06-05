@@ -460,6 +460,7 @@ async def chat_completions(req: ChatRequest, _auth=Depends(_check_api_key)):
             messages=task.messages,
             max_tokens=task.max_tokens,
             temperature=task.temperature,
+            seed=task.seed,
         )
         r2, n2, s2 = await _dispatch_and_wait(
             shadow, exclude={primary_node.info.node_id}

@@ -289,3 +289,94 @@ async def test_round_trip_with_registered_stack():
     })
     assert r.status_code == 200
     assert r.json()["choices"][0]["message"]["content"] == "Registry-verified response."
+
+
+# ── temperature=0.0 regression (#11) ─────────────────────────────────────────
+
+async def test_temperature_zero_not_coerced_to_default():
+    """temperature=0.0 must reach the node as 0.0, not be silently replaced by 0.7."""
+    conn = _add_node("n1", ["llama3"], "Deterministic.")
+    await _post({
+        "model": "llama3",
+        "messages": [{"role": "user", "content": "hi"}],
+        "temperature": 0.0,
+    })
+    assert conn.ws.last_payload["temperature"] == 0.0
+
+
+async def test_temperature_none_uses_default():
+    """When temperature is omitted, the default 0.7 is used."""
+    conn = _add_node("n1", ["llama3"], "Normal.")
+    await _post({
+        "model": "llama3",
+        "messages": [{"role": "user", "content": "hi"}],
+    })
+    assert conn.ws.last_payload["temperature"] == 0.7
+
+
+# ── Shadow task seed propagation ──────────────────────────────────────────────
+
+async def test_shadow_task_inherits_seed():
+    """Checker (shadow) task must carry the same seed as the primary task."""
+    from verification import RedundantExecutionVerifier
+    import orchestrator as orc_mod
+
+    _register(seed=55)
+
+    dispatched: list[dict] = []
+
+    class _CapturingWS:
+        def __init__(self, node_id: str, response: str):
+            self._node_id = node_id
+            self._response = response
+            self.last_payload = None
+
+        async def send_text(self, data: str):
+            import json as _json
+            msg = _json.loads(data)
+            if msg.get("type") != "task":
+                return
+            self.last_payload = msg["payload"]
+            dispatched.append(msg["payload"])
+            task_id = msg["payload"]["task_id"]
+
+            async def _resolve():
+                import asyncio
+                await asyncio.sleep(0.02)
+                if self._node_id in nodes:
+                    nodes[self._node_id].status = NodeStatus.idle
+                    nodes[self._node_id].tasks_completed += 1
+                results[task_id] = TaskResult(
+                    task_id=task_id,
+                    node_id=self._node_id,
+                    content=self._response,
+                    tokens_used=3,
+                )
+                if task_id in pending_events:
+                    pending_events[task_id].set()
+
+            asyncio.create_task(_resolve())
+
+    # Two nodes so the checker can be dispatched to the second
+    for nid, resp in [("n1", "The answer."), ("n2", "The answer.")]:
+        ws = _CapturingWS(nid, resp)
+        info = NodeInfo(node_id=nid, models=["qwen3:8b"])
+        conn = orc.NodeConnection(ws=ws, info=info)
+        nodes[nid] = conn
+
+    # Swap in a verifier that always rechecks
+    old_verifier = orc_mod.verifier
+    orc_mod.verifier = RedundantExecutionVerifier(sample_rate=1.0)
+    try:
+        r = await _post({
+            "model": "qwen3:8b",
+            "messages": [{"role": "user", "content": "hello"}],
+        })
+    finally:
+        orc_mod.verifier = old_verifier
+
+    assert r.status_code == 200
+    assert len(dispatched) == 2, "Expected primary + shadow dispatch"
+    seeds = [d["seed"] for d in dispatched]
+    assert seeds[0] == 55, f"Primary seed wrong: {seeds[0]}"
+    assert seeds[1] == 55, f"Shadow seed wrong: {seeds[1]}"
