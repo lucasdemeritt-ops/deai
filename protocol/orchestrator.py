@@ -103,6 +103,10 @@ chain_ledger = None
 # Reward-settlement epoch length (seconds). Chain mode only.
 _settle_interval = 3600
 
+# Per-task inference timeout (seconds). Raise via --task-timeout for slow
+# CPU nodes or large models. GPU nodes typically finish well under 60s.
+_task_timeout = 60.0
+
 # Optional API key — None means open access (fine for local dev)
 _api_key: Optional[str] = None
 _bearer = HTTPBearer(auto_error=False)
@@ -376,7 +380,7 @@ async def _dispatch_and_wait(
     log.info(f"Dispatched   id={task.task_id}  to={node.info.node_id}  score={score}  reason={reason}")
 
     try:
-        await asyncio.wait_for(event.wait(), timeout=60.0)
+        await asyncio.wait_for(event.wait(), timeout=_task_timeout)
     except asyncio.TimeoutError:
         pending_events.pop(task.task_id, None)
         node.status = NodeStatus.idle
@@ -719,6 +723,12 @@ if __name__ == "__main__":
                         help="Seconds between reward-settlement epochs (publish a "
                              "cumulative Merkle root). Chain mode only. Default 3600.")
 
+    parser.add_argument("--task-timeout", type=float,
+                        default=float(os.getenv("DAI_TASK_TIMEOUT", "60")),
+                        help="Seconds to wait for a node to return a result before "
+                             "issuing a 504 (default 60). Raise for CPU nodes or "
+                             "large models.")
+
     # Verification (Standard tier — docs/VERIFICATION.md)
     parser.add_argument("--verify-sample-rate", type=float,
                         default=float(os.getenv("DAI_VERIFY_SAMPLE_RATE", "0.0")),
@@ -747,6 +757,9 @@ if __name__ == "__main__":
         log.info("API key authentication enabled on /v1/chat/completions")
     else:
         log.info("Running in open-access mode (no API key required)")
+
+    _task_timeout = args.task_timeout
+    log.info(f"Task timeout: {_task_timeout}s")
 
     verifier = make_verifier(
         args.verify_sample_rate,
