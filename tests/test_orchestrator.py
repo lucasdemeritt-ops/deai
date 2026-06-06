@@ -291,6 +291,49 @@ async def test_round_trip_with_registered_stack():
     assert r.json()["choices"][0]["message"]["content"] == "Registry-verified response."
 
 
+# ── Stack max_tokens floor ────────────────────────────────────────────────────
+
+async def test_stack_max_tokens_overrides_low_request():
+    """Stack's max_tokens acts as a floor — a low request value is raised to match."""
+    model_registry.register(ModelStack(
+        model_id="qwen3:8b", runtime="ollama>=0.6.0",
+        temperature=0.0, seed=42, max_tokens=2048,
+    ))
+    conn = _add_node("n1", ["qwen3:8b"], "Answer.")
+    await _post({
+        "model": "qwen3:8b",
+        "messages": [{"role": "user", "content": "write a haiku"}],
+        "max_tokens": 64,  # caller undershoots; stack floor is 2048
+    })
+    assert conn.ws.last_payload["max_tokens"] == 2048
+
+
+async def test_stack_max_tokens_does_not_lower_high_request():
+    """If the caller requests more tokens than the stack floor, honour the caller."""
+    model_registry.register(ModelStack(
+        model_id="qwen3:8b", runtime="ollama>=0.6.0",
+        temperature=0.0, seed=42, max_tokens=2048,
+    ))
+    conn = _add_node("n1", ["qwen3:8b"], "Answer.")
+    await _post({
+        "model": "qwen3:8b",
+        "messages": [{"role": "user", "content": "hi"}],
+        "max_tokens": 4096,  # caller requests more than stack floor
+    })
+    assert conn.ws.last_payload["max_tokens"] == 4096
+
+
+async def test_unregistered_model_uses_request_max_tokens():
+    """Without a stack, max_tokens comes straight from the request."""
+    conn = _add_node("n1", ["llama3"], "Answer.")
+    await _post({
+        "model": "llama3",
+        "messages": [{"role": "user", "content": "hi"}],
+        "max_tokens": 128,
+    })
+    assert conn.ws.last_payload["max_tokens"] == 128
+
+
 # ── temperature=0.0 regression (#11) ─────────────────────────────────────────
 
 async def test_temperature_zero_not_coerced_to_default():
