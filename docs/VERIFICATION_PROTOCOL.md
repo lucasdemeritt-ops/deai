@@ -272,7 +272,7 @@ empirical tuning §4 defers to testnet, now with a concrete data point.
 
 ## 8. Conformance ledger (code ⇄ spec — no drift)
 
-What `protocol/{verification,orchestrator,ledger,chain_ledger,merkle}.py` +
+What `protocol/{verification,orchestrator,ledger,chain_ledger,merkle,model_registry,committee}.py` +
 `chain/contracts/MerkleDistributor.sol` implement **today**:
 
 - ✅ `Verifier` seam; `ContentVerifier` default (legacy non-empty, no recheck);
@@ -282,10 +282,28 @@ What `protocol/{verification,orchestrator,ledger,chain_ledger,merkle}.py` +
   step 1).
 - ✅ No-checker-free → optimistic accept, logged unverified (§2 `FINALIZED*`).
 - ✅ `p` / threshold as static knobs, default-off (§3, §7).
-- ❌ Committee adjudication, appeal window, verified-dishonesty slash (§5.2
-  steps 2–4) — **designed in §13, not yet implemented**.
-- ❌ Per-model reference inference stack / model registry (§1) — **designed in
-  §12, not yet implemented**.
+- ✅ **Committee adjudication, appeal window, verified-dishonesty slash**
+  (§5.2 steps 2–4, fully specified in §13): `protocol/committee.py` +
+  orchestrator integration. `_convene_committee` picks N idle eligible nodes
+  excluding primary+checker (uniformly at random per §13.2), dispatches the
+  same task in parallel under `_committee_timeout`, tallies votes per §13.4,
+  and on a `CHECKER_UPHELD` / `PRIMARY_UPHELD` verdict schedules a delayed
+  slash via `_schedule_slash` (appeal window per §13.6). The slash reduces
+  the in-memory bond and — in chain mode — the off-chain `_accrued_wei`
+  bond and calls `SlashingContract.slash`. ❌ still deferred (§13.9): the
+  appeal *mechanism* itself (the window is currently a time-lock only),
+  reputation-weighted committee selection (random pool now), the on-chain
+  *dispute-slash* bridge as a distinct contract path, and committee
+  compensation economics. Parameters (committee_size, timeout, appeal
+  window, slash_fraction) are CLI-configurable; defaults are §13.8 starting
+  points.
+- ✅ **Per-model reference inference stack / model registry** (§12):
+  `protocol/model_registry.py` (`ModelStack` + `ModelRegistry` with
+  Standard-tier eligibility = temperature 0 + seed set). Persistence
+  (§12.6): atomic save / load / auto-save via `--registry-file`. ❌ still
+  open: weight-digest enrollment, on-chain registry commit for tamper
+  evidence, runtime-version ranges across heterogeneous hardware, and
+  stack versioning/migration.
 - ✅ Off-chain accrual + claimable batch settlement (build-now #4):
   `MerkleDistributor.sol` + `protocol/merkle.py`; orchestrator accrues and
   publishes a cumulative root per epoch; `/claim/{wallet}` serves proofs;
@@ -610,10 +628,15 @@ required — the registry lookup is per-task.
 
 ## 13. Committee Escalation Design
 
-> Status: **designed** (this section). Not yet implemented — the orchestrator
-> currently stops at `DISPUTED` (reject + `escalation_required` flag, no
-> committee convened, no slash). This section specifies the full §5.2 steps
-> 2–4 flow that must be built before verified-dishonesty slashing is live.
+> Status: **designed and implemented** in `protocol/committee.py` +
+> orchestrator. A `DISPUTED` task now convenes the committee, tallies votes
+> per §13.4, and on a confirmed dishonest verdict schedules a delayed slash
+> (appeal window per §13.6) that reduces the in-memory bond and — in chain
+> mode — the off-chain accrual bond and calls `SlashingContract.slash`.
+> Conformance details in §8. Items still deferred per §13.9 (the appeal
+> mechanism itself, reputation-weighted committee selection, and the
+> on-chain dispute-slash bridge as a distinct path) are explicitly listed
+> there.
 
 ### 13.1 When escalation triggers
 

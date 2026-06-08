@@ -297,3 +297,22 @@ class ChainLedger(Ledger):
         except Exception as e:
             log.error(f"slash_onchain failed  wallet={wallet}  err={e}")
             return ""
+
+    def slash_accrual(self, wallet: str, fraction: float) -> int:
+        """Burn ``fraction`` of a wallet's off-chain unvested accrual bond
+        (VERIFICATION_PROTOCOL.md §13.5 step 2). Returns the wei amount burned.
+        Off-chain only — the next ``settle_epoch()`` propagates the reduced
+        balance on-chain via the new cumulative root."""
+        if not 0.0 < fraction <= 1.0:
+            raise ValueError("fraction must be in (0, 1]")
+        addr = Web3.to_checksum_address(wallet)
+        current = self._accrued_wei.get(addr, 0)
+        if current <= 0:
+            return 0
+        burn = int(current * fraction)
+        self._accrued_wei[addr] = current - burn
+        log.warning(
+            f"slash accrual    wallet={addr[:10]}...  burned={burn/_WEI:.2f} DAI  "
+            f"remaining={self._accrued_wei[addr]/_WEI:.2f} DAI"
+        )
+        return burn

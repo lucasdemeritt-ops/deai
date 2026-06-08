@@ -83,6 +83,19 @@ class Ledger:
     def balance(self, node_id: str) -> float:
         return self._balances.get(node_id, NodeBalance(node_id=node_id)).balance
 
+    def slash(self, node_id: str, fraction: float, reason: str = "") -> float:
+        """Burn ``fraction`` of the node's current balance off-chain. Returns
+        the amount burned. Bond can't go negative — what's there gets taken,
+        no more (see VERIFICATION_PROTOCOL §13.5: unvested earnings only)."""
+        if not 0.0 < fraction <= 1.0:
+            raise ValueError("fraction must be in (0, 1]")
+        bal = self._balances.get(node_id)
+        if bal is None or bal.balance <= 0:
+            return 0.0
+        burn = bal.balance * fraction
+        bal.balance -= burn
+        return burn
+
     def summary(self, node_id: str) -> dict:
         return self._ensure(node_id).summary()
 
