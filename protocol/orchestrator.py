@@ -41,10 +41,11 @@ import argparse
 import asyncio
 import json
 import logging
+import random
 import sys
 import time
 import os
-from typing import Dict, Optional
+from typing import Callable, Dict, Optional
 
 try:
     from dotenv import load_dotenv
@@ -69,6 +70,11 @@ from shared.schemas import (
 from ledger import Ledger
 from verification import Verifier, ContentVerifier, RedundantExecutionVerifier, make_verifier
 from model_registry import ModelRegistry, ModelStack
+from committee import (
+    CommitteeOutcome, Verdict, quorum, tally_votes,
+    DEFAULT_COMMITTEE_SIZE, DEFAULT_COMMITTEE_TIMEOUT_S,
+    DEFAULT_APPEAL_WINDOW_S, DEFAULT_SLASH_FRACTION,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -157,6 +163,13 @@ verifier: Verifier = ContentVerifier()
 # Models without a registered stack always run ContentVerifier regardless of
 # --verify-sample-rate.  Register stacks via POST /admin/model-registry.
 model_registry: ModelRegistry = ModelRegistry()
+
+# Committee escalation (VERIFICATION_PROTOCOL.md §13). Configurable via CLI;
+# defaults are the §13.8 starting points.
+_committee_size: int = DEFAULT_COMMITTEE_SIZE
+_committee_timeout: float = DEFAULT_COMMITTEE_TIMEOUT_S
+_appeal_window: float = DEFAULT_APPEAL_WINDOW_S
+_slash_fraction: float = DEFAULT_SLASH_FRACTION
 
 
 # ── Routing ───────────────────────────────────────────────────────────────────
@@ -405,6 +418,156 @@ def _slash_for_bad_result(node: NodeConnection, reason: str) -> None:
         asyncio.create_task(asyncio.to_thread(chain_ledger.slash_onchain, node.info.wallet))
 
 
+# ── Committee escalation (VERIFICATION_PROTOCOL §13) ─────────────────────────
+
+def _select_committee_nodes(
+    model: str, n: int, exclude_ids: set, project: Optional[str] = None
+) -> list[NodeConnection]:
+    """§13.2: pick up to ``n`` idle eligible nodes, excluding the primary and
+    checker, *uniformly at random within the eligible pool* to defeat a
+    predictable-committee attack. Marks the picks busy synchronously so
+    parallel selection has no race.
+
+    Refinements deferred (§13.2): preferring low-dispute-rate and
+    longest-active nodes once per-node dispute history is tracked.
+    """
+    candidates: list[NodeConnection] = []
+    for node in nodes.values():
+        if node.status != NodeStatus.idle:
+            continue
+        if node.info.node_id in exclude_ids:
+            continue
+        if chain_ledger is not None and node.info.wallet:
+            if not chain_ledger.is_eligible(node.info.wallet):
+                continue
+        if score_node(node, model, project) < 0:
+            continue
+        candidates.append(node)
+    random.shuffle(candidates)
+    picked = candidates[:n]
+    now = time.time()
+    for node in picked:
+        node.status = NodeStatus.busy
+        node.last_task_time = now
+    return picked
+
+
+async def _ask_committee_member(node: NodeConnection, task: Task) -> Optional[TaskResult]:
+    """Dispatch ``task`` (fresh task_id) to ``node`` and await its reply within
+    ``_committee_timeout``. Returns None on send error or timeout. The node is
+    released to idle whether or not it responded."""
+    event = asyncio.Event()
+    pending_events[task.task_id] = event
+    node.current_task_id = task.task_id
+    msg = {
+        "type": "task",
+        "payload": {
+            "task_id": task.task_id,
+            "model": task.model,
+            "messages": [m.model_dump() for m in task.messages],
+            "max_tokens": task.max_tokens,
+            "temperature": task.temperature,
+            "seed": task.seed,
+        },
+    }
+    try:
+        await node.ws.send_text(json.dumps(msg))
+    except Exception as e:
+        log.warning(f"COMMITTEE dispatch failed  node={node.info.node_id}  err={e}")
+        pending_events.pop(task.task_id, None)
+        node.status = NodeStatus.idle
+        return None
+    try:
+        await asyncio.wait_for(event.wait(), timeout=_committee_timeout)
+    except asyncio.TimeoutError:
+        pending_events.pop(task.task_id, None)
+        node.status = NodeStatus.idle
+        return None
+    pending_events.pop(task.task_id, None)
+    return results.pop(task.task_id, None)
+
+
+async def _convene_committee(
+    base_task: Task,
+    primary: TaskResult,
+    checker: TaskResult,
+    primary_node: NodeConnection,
+    checker_node: NodeConnection,
+    comparator: Callable[[str, str], float],
+    threshold: float,
+) -> Optional[CommitteeOutcome]:
+    """§13.3–§13.4: convene ``_committee_size`` nodes, gather their responses,
+    return the verdict. Returns None when fewer than quorum nodes either could
+    be selected or returned in time (caller falls back to ``FINALIZED*`` —
+    optimistic accept, §13.3)."""
+    exclude = {primary_node.info.node_id, checker_node.info.node_id}
+    members = _select_committee_nodes(
+        base_task.model, _committee_size, exclude, base_task.project
+    )
+    q = quorum(_committee_size)
+    if len(members) < q:
+        for node in members:
+            node.status = NodeStatus.idle
+        log.warning(
+            f"COMMITTEE  id={base_task.task_id}  insufficient eligible nodes "
+            f"({len(members)}/{q}) — fallback to FINALIZED*"
+        )
+        return None
+
+    log.info(f"COMMITTEE  id={base_task.task_id}  convening N={len(members)}")
+    shadows = [
+        Task(model=base_task.model, messages=base_task.messages,
+             max_tokens=base_task.max_tokens, temperature=base_task.temperature,
+             seed=base_task.seed, project=base_task.project)
+        for _ in members
+    ]
+    responses = await asyncio.gather(
+        *(_ask_committee_member(n, t) for n, t in zip(members, shadows)),
+        return_exceptions=False,
+    )
+    contents = [r.content for r in responses if r is not None and r.content]
+    if len(contents) < q:
+        log.warning(
+            f"COMMITTEE  id={base_task.task_id}  only {len(contents)} responses "
+            f"(need {q}) — fallback to FINALIZED*"
+        )
+        return None
+
+    return tally_votes(primary.content, checker.content, contents, comparator, threshold)
+
+
+def _apply_slash(node_id: str, wallet: Optional[str], fraction: float, reason: str) -> None:
+    """§13.5: burn ``fraction`` of the node's unvested bond off-chain (in-memory
+    ledger), plus reduce the off-chain accrual bond and call the on-chain
+    ``SlashingContract.slash`` when running with chain mode. Idempotent on
+    zero-balance nodes (slash returns 0)."""
+    burned = ledger.slash(node_id, fraction, reason)
+    log.warning(
+        f"SLASH        node={node_id}  fraction={fraction:.2%}  "
+        f"burned_offchain={burned:.2f} DAI  reason={reason}"
+    )
+    if chain_ledger is not None and wallet:
+        try:
+            chain_ledger.slash_accrual(wallet, fraction)
+        except Exception as e:
+            log.error(f"slash_accrual failed  wallet={wallet}  err={e}")
+        asyncio.create_task(asyncio.to_thread(chain_ledger.slash_onchain, wallet))
+
+
+async def _schedule_slash(node_id: str, wallet: Optional[str], fraction: float,
+                          reason: str, window: float) -> None:
+    """§13.6: appeal window (time-lock; appeal mechanism itself unbuilt).
+    Sleeps ``window`` seconds then applies the slash. With window=0 the slash
+    is immediate (useful for tests)."""
+    if window > 0:
+        log.warning(
+            f"SLASH queued node={node_id}  reason={reason}  "
+            f"appeal_window={window:.0f}s"
+        )
+        await asyncio.sleep(window)
+    _apply_slash(node_id, wallet, fraction, reason)
+
+
 # ── HTTP: OpenAI-compatible inference endpoint ────────────────────────────────
 
 @app.post("/v1/chat/completions", response_model=ChatResponse)
@@ -482,14 +645,60 @@ async def chat_completions(req: ChatRequest, _auth=Depends(_check_api_key)):
                 f"checker={n2.info.node_id}  {outcome.detail}"
             )
             if not outcome.accepted:
-                stats["failed"] += 1
-                # Escalation/committee not built yet. Do NOT auto-slash —
-                # docs/VERIFICATION.md flags false-positive slashing of an
-                # honest provider as existential.
-                raise HTTPException(
-                    status_code=502,
-                    detail="Result failed redundant verification; committee escalation required.",
+                # §13: convene a committee, decide by majority, and only on a
+                # confirmed dishonest verdict schedule a delayed slash. A
+                # 2-sample mismatch never auto-slashes — false-positive
+                # slashing of an honest provider is flagged existential.
+                committee_outcome = await _convene_committee(
+                    task, primary, r2, primary_node, n2,
+                    effective_verifier._comparator,
+                    effective_verifier.agreement_threshold,
                 )
+                if committee_outcome is None:
+                    # §13.3 fallback: insufficient committee → FINALIZED*.
+                    log.warning(
+                        f"VERIFY unverified  id={task.task_id}  "
+                        f"reason=committee-unavailable; accepting optimistically"
+                    )
+                elif committee_outcome.verdict is Verdict.PRIMARY_UPHELD:
+                    log.info(
+                        f"COMMITTEE  id={task.task_id}  verdict=PRIMARY_UPHELD "
+                        f"{committee_outcome.detail}  dishonest=checker({n2.info.node_id})"
+                    )
+                    asyncio.create_task(_schedule_slash(
+                        n2.info.node_id, n2.info.wallet, _slash_fraction,
+                        f"committee verdict CHECKER dishonest on task {task.task_id}",
+                        _appeal_window,
+                    ))
+                    # primary wins → fall through to accrual.
+                elif committee_outcome.verdict is Verdict.CHECKER_UPHELD:
+                    log.warning(
+                        f"COMMITTEE  id={task.task_id}  verdict=CHECKER_UPHELD "
+                        f"{committee_outcome.detail}  dishonest=primary({primary_node.info.node_id})"
+                    )
+                    asyncio.create_task(_schedule_slash(
+                        primary_node.info.node_id, primary_node.info.wallet, _slash_fraction,
+                        f"committee verdict PRIMARY dishonest on task {task.task_id}",
+                        _appeal_window,
+                    ))
+                    stats["failed"] += 1
+                    raise HTTPException(
+                        status_code=502,
+                        detail=(
+                            f"Committee upheld checker; primary result rejected "
+                            f"({committee_outcome.detail})"
+                        ),
+                    )
+                else:  # UNRESOLVABLE — tie or no majority. No slash, no pay.
+                    log.warning(
+                        f"COMMITTEE  id={task.task_id}  verdict=UNRESOLVABLE "
+                        f"{committee_outcome.detail}"
+                    )
+                    stats["failed"] += 1
+                    raise HTTPException(
+                        status_code=502,
+                        detail=f"Verification unresolvable ({committee_outcome.detail})",
+                    )
 
     # Accepted → finalize the reward (off-chain ledger + optional on-chain mint).
     primary.verified = True
@@ -749,8 +958,35 @@ if __name__ == "__main__":
                         default=os.getenv("DAI_EMBEDDING_MODEL", "nomic-embed-text"),
                         help="Embedding model to use (default: nomic-embed-text). "
                              "Pull with: ollama pull nomic-embed-text")
+    parser.add_argument("--registry-file",
+                        default=os.getenv("DAI_REGISTRY_FILE"),
+                        help="Path to a JSON file that persists the model registry "
+                             "across orchestrator restarts. Loaded at startup; "
+                             "subsequent registrations auto-save (VERIFICATION_PROTOCOL §12.6).")
+
+    # Committee escalation (VERIFICATION_PROTOCOL §13). Defaults are §13.8
+    # starting points; all four are testnet-calibrated.
+    parser.add_argument("--committee-size", type=int,
+                        default=int(os.getenv("DAI_COMMITTEE_SIZE", str(DEFAULT_COMMITTEE_SIZE))),
+                        help=f"Committee size (must be odd >=1; default {DEFAULT_COMMITTEE_SIZE}).")
+    parser.add_argument("--committee-timeout", type=float,
+                        default=float(os.getenv("DAI_COMMITTEE_TIMEOUT", str(DEFAULT_COMMITTEE_TIMEOUT_S))),
+                        help=f"Max seconds to wait for committee responses "
+                             f"(default {DEFAULT_COMMITTEE_TIMEOUT_S}).")
+    parser.add_argument("--appeal-window", type=float,
+                        default=float(os.getenv("DAI_APPEAL_WINDOW", str(DEFAULT_APPEAL_WINDOW_S))),
+                        help=f"Seconds between a dishonest verdict and the slash "
+                             f"firing (default {DEFAULT_APPEAL_WINDOW_S}). 0 = immediate.")
+    parser.add_argument("--slash-fraction", type=float,
+                        default=float(os.getenv("DAI_SLASH_FRACTION", str(DEFAULT_SLASH_FRACTION))),
+                        help=f"Fraction of unvested bond burned on a verified "
+                             f"dishonesty verdict (0,1]; default {DEFAULT_SLASH_FRACTION}.")
 
     args = parser.parse_args()
+    if args.committee_size < 1 or args.committee_size % 2 == 0:
+        parser.error("--committee-size must be an odd integer >= 1")
+    if not 0.0 < args.slash_fraction <= 1.0:
+        parser.error("--slash-fraction must be in (0, 1]")
 
     if args.api_key:
         _api_key = args.api_key
@@ -780,6 +1016,27 @@ if __name__ == "__main__":
         )
     else:
         log.info("Verification: content-only (legacy non-empty check; no redundant rechecks)")
+
+    if args.registry_file:
+        loaded = model_registry.load_from_file(args.registry_file)
+        model_registry.set_persistence(args.registry_file)
+        log.info(
+            f"Model registry: persisted at {args.registry_file}  "
+            f"loaded={loaded} stacks  autosave=ON"
+        )
+    else:
+        log.info("Model registry: in-memory only (no --registry-file)")
+
+    _committee_size = args.committee_size
+    _committee_timeout = args.committee_timeout
+    _appeal_window = args.appeal_window
+    _slash_fraction = args.slash_fraction
+    log.info(
+        f"Committee escalation: size={_committee_size} "
+        f"timeout={_committee_timeout:.0f}s "
+        f"appeal_window={_appeal_window:.0f}s "
+        f"slash_fraction={_slash_fraction:.2%}"
+    )
 
     if args.chain:
         missing = [n for n, v in [
