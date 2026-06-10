@@ -365,6 +365,13 @@ after mid-session drop; Sepolia chain mode end-to-end.
   task's waiter; late results are dropped instead of leaking orphans in
   `results`; failed tasks are counted once (HTTP path), not twice.
 
+- ✅ Batch fan-out (`POST /v1/batch`, VISION Stage 1): the verified pipeline
+  is factored into `_execute_verified_task` and shared by the single and
+  batch endpoints, so every batch sub-task gets identical treatment —
+  registered-stack params, sampled redundant verification, committee
+  escalation, and per-sub-task accrual (ECONOMICS.md §3 Stage 1: "pay per
+  verified sub-task"). Concurrency is bounded to the number of online nodes.
+
 Any change to those files must update this section in the same commit.
 
 ---
