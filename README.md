@@ -183,7 +183,7 @@ Nothing below ships with real value until this phase is proven. All of it runs o
 
 The contribution staircase begins (VISION.md Stage 1) alongside openness work.
 
-- [ ] **Job parallelism / agent swarms** — large jobs decomposed into independent sub-tasks across many nodes, results aggregated by a coordinator.
+- [~] **Job parallelism / agent swarms** — *in progress.* `POST /v1/batch` fans one job's sub-tasks out across all online nodes in parallel and aggregates results in order (VISION Stage 1, first rung); every sub-task runs the full verified pipeline (stack params, sampled verification, committee, per-sub-task accrual) and failures are per-item. Remaining: automatic decomposition of a single large prompt into sub-tasks, LLM-coordinator aggregation, multi-step swarm pipelines.
 - [ ] **Reward pooling & dedicated mining** — supporters point nodes at a specific project; pooled rewards. Task sponsorship; shareable project pages.
 - [ ] **Provider-passthrough auth** — authenticate with an existing AI provider (Anthropic, OpenAI, etc.); DAI never touches billing or credentials.
 - [ ] **Cloud bridge nodes** — contribute existing provider subscription capacity; the provider bills the miner directly.

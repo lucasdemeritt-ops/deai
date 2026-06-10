@@ -354,6 +354,24 @@ during this run: `temperature or 0.7` treated `0.0` as falsy (fixed to
 to skip models containing "embed"). **Not yet tested:** node reconnect
 after mid-session drop; Sepolia chain mode end-to-end.
 
+- ✅ Committee tally uses the **affirmative-vote rule** (§13.4): a checker
+  vote requires agreement *with the checker*, ambiguity counts toward
+  neither side, and a degraded comparator can only yield `UNRESOLVABLE` —
+  never a slash. (Audit fix: the first implementation counted any
+  non-primary-agreement as a checker vote, so an embedding outage could
+  have slashed an honest primary.)
+- ✅ WS handler hardened: a node can only complete/fail the task it was
+  assigned (`current_task_id` check) — forged completions can't wake another
+  task's waiter; late results are dropped instead of leaking orphans in
+  `results`; failed tasks are counted once (HTTP path), not twice.
+
+- ✅ Batch fan-out (`POST /v1/batch`, VISION Stage 1): the verified pipeline
+  is factored into `_execute_verified_task` and shared by the single and
+  batch endpoints, so every batch sub-task gets identical treatment —
+  registered-stack params, sampled redundant verification, committee
+  escalation, and per-sub-task accrual (ECONOMICS.md §3 Stage 1: "pay per
+  verified sub-task"). Concurrency is bounded to the number of online nodes.
+
 Any change to those files must update this section in the same commit.
 
 ---
@@ -686,11 +704,27 @@ targets for future tasks.
 
 1. Collect all committee responses. Apply the same comparator and threshold as
    the primary/checker comparison (§4).
-2. Compare each committee response to the primary result. A committee response
-   is a **primary vote** if `similarity(committee_i, primary) >=
-   agreement_threshold`; otherwise it is a **checker vote**.
-3. Majority side wins. The dissenting node(s) — whether primary, checker, or
-   a committee member — are deemed **dishonest**.
+2. A committee response is a **primary vote** if `similarity(committee_i,
+   primary) >= agreement_threshold`; else a **checker vote** if
+   `similarity(committee_i, checker) >= agreement_threshold`; else
+   **ambiguous** — it counts toward *neither* side. (A response clearing the
+   threshold against both sides counts as a primary vote: the benefit of the
+   doubt goes to the accused.)
+3. A side wins only with a **quorum of affirmative votes**
+   (`⌊N/2⌋ + 1`). Disagreement with the primary is *not* evidence for the
+   checker — slashing requires the committee to actively corroborate the
+   accusing side. If ambiguity erodes both sides below quorum, the verdict is
+   `UNRESOLVABLE`: no reward, no slash. The losing side's node(s) are deemed
+   **dishonest** only on a quorum verdict.
+
+> Why the affirmative-vote rule matters: if the comparator degrades (an
+> embedding-endpoint outage silently falls back to sequence-ratio, §4), honest
+> paraphrases suddenly match *neither* side. Under a naive
+> "not-primary ⇒ checker" rule that reads as a checker-upheld verdict and
+> slashes an honest primary — an infrastructure failure becomes a slashing
+> event. Under the affirmative rule it reads as all-ambiguous →
+> `UNRESOLVABLE`, which only withholds payment. Fail toward not-paying,
+> never toward wrongly-slashing.
 
 **Example (N=3):**
 
@@ -707,9 +741,11 @@ verdict: primary upheld (2/3), checker is dishonest → checker slashed
 - If the committee itself splits evenly (tie — should not happen with odd N),
   treat as `UNRESOLVABLE`, no slash.
 - A committee member whose output matches neither primary nor checker beyond
-  threshold is itself suspicious; flag it for elevated `p` but do not slash it
-  from this single event alone — two independent events required before a
-  committee member is slashed.
+  threshold counts toward neither side and is flagged for elevated `p`, but is
+  not slashed from this single event alone — two independent events required
+  before a committee member is slashed.
+- A degraded or failing comparator can only produce `UNRESOLVABLE`, never a
+  slash (the affirmative-vote rule above).
 
 ### 13.5 Slash mechanics
 

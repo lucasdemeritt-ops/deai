@@ -81,6 +81,39 @@ class TaskResult(BaseModel):
     verified: bool = False
 
 
+# ── Batch fan-out (VISION.md Stage 1 — job parallelism) ──────────────────────
+
+class BatchRequest(BaseModel):
+    """One job decomposed into independent sub-tasks, fanned out across the
+    network in parallel. Each prompt becomes one sub-task that runs through
+    the full verified pipeline (stack params, verification sampling, accrual
+    per sub-task — ECONOMICS.md §3 Stage 1)."""
+    model: str
+    prompts: List[str]
+    max_tokens: Optional[int] = 512
+    temperature: Optional[float] = 0.7
+    project: Optional[str] = None
+    max_parallel: Optional[int] = None  # cap concurrent dispatches (default: nodes online)
+
+
+class BatchItem(BaseModel):
+    index: int                       # position of the prompt in the request
+    status: str                      # "ok" | "error"
+    content: Optional[str] = None
+    error: Optional[str] = None
+    node_id: Optional[str] = None    # which node served this sub-task
+    tokens: int = 0
+
+
+class BatchResponse(BaseModel):
+    id: str = Field(default_factory=lambda: f"batch-{uuid.uuid4().hex[:12]}")
+    object: str = "batch.completion"
+    model: str
+    items: List[BatchItem]
+    completed: int
+    failed: int
+
+
 # ── OpenAI-compatible response shape ─────────────────────────────────────────
 
 class Choice(BaseModel):

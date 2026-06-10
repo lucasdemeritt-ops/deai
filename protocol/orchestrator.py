@@ -63,6 +63,7 @@ from pydantic import BaseModel
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from shared.schemas import (
     ChatRequest, ChatResponse, Choice, Message, Role, Usage,
+    BatchRequest, BatchItem, BatchResponse,
     Task, TaskResult, TaskStatus,
     NodeInfo, NodeStatus,
     WSMessage,
@@ -303,27 +304,51 @@ async def node_endpoint(ws: WebSocket):
 
             elif msg.type == "task_complete":
                 result = TaskResult(**msg.payload)
-
                 node = nodes[node_id]
+
+                # Only accept a completion for the task this node was actually
+                # assigned. Anything else is either a late result for a task
+                # that already timed out (drop it — storing would leak an
+                # orphan in `results` forever) or an attempt to complete a
+                # task assigned to a different node (never wake another
+                # task's waiter on an unassigned node's say-so).
+                if result.task_id != node.current_task_id:
+                    if result.task_id in pending_events:
+                        log.warning(f"Rejected completion for unassigned task  id={result.task_id}  from={node_id}")
+                    else:
+                        log.info(f"Late result dropped  id={result.task_id}  node={node_id}")
+                    continue
+
                 node.status = NodeStatus.idle
                 node.tasks_completed += 1
                 node.current_task_id = None
-                results[result.task_id] = result
 
                 log.info(f"Result in    id={result.task_id}  node={node_id}  tokens={result.tokens_used}")
 
                 # Verification, ledger, and on-chain settlement happen in the
                 # HTTP path — it owns the task context and can re-dispatch for
                 # a redundant check before any reward is finalized. Here we
-                # just hand the raw result back to the waiting request.
-                if result.task_id in pending_events:
-                    pending_events[result.task_id].set()
+                # just hand the raw result back to the waiting request. Store
+                # only when a waiter exists, so `results` never accumulates
+                # entries nobody will pop.
+                event = pending_events.get(result.task_id)
+                if event is not None:
+                    results[result.task_id] = result
+                    event.set()
+                else:
+                    log.info(f"Result after timeout dropped  id={result.task_id}  node={node_id}")
 
             elif msg.type == "task_failed":
                 task_id = msg.payload.get("task_id")
                 node = nodes[node_id]
+                if task_id != node.current_task_id:
+                    log.info(f"Stale failure ignored  id={task_id}  node={node_id}")
+                    continue
                 node.status = NodeStatus.idle
-                stats["failed"] += 1
+                node.current_task_id = None
+                # No stats increment here: the waiting HTTP request observes
+                # the missing result and counts the failure once — a WS-side
+                # increment double-counted every failed task.
                 log.warning(f"Task failed  id={task_id}  node={node_id}")
                 if task_id and task_id in pending_events:
                     pending_events[task_id].set()
@@ -568,46 +593,58 @@ async def _schedule_slash(node_id: str, wallet: Optional[str], fraction: float,
     _apply_slash(node_id, wallet, fraction, reason)
 
 
-# ── HTTP: OpenAI-compatible inference endpoint ────────────────────────────────
+# ── Verified task pipeline (shared by single + batch endpoints) ──────────────
 
-@app.post("/v1/chat/completions", response_model=ChatResponse)
-async def chat_completions(req: ChatRequest, _auth=Depends(_check_api_key)):
-    stats["requests"] += 1
-
-    # Apply registered stack parameters if this model has one (§12.4).
-    # temperature=0 and the registered seed override the request values so both
-    # primary and checker run identically — required for comparison to be valid.
-    stack = model_registry.get(req.model)
+def _make_task(
+    model: str,
+    messages: list,
+    max_tokens: Optional[int],
+    temperature: Optional[float],
+    project: Optional[str],
+) -> tuple[Task, Verifier]:
+    """Build a Task with registered-stack parameters applied (§12.4) and pick
+    the effective verifier (§12.5). temperature=0 and the registered seed
+    override request values so primary, checker, and committee all run
+    identically — required for comparison to be valid."""
+    stack = model_registry.get(model)
     task = Task(
-        model=req.model,
-        messages=req.messages,
-        max_tokens=max(req.max_tokens if req.max_tokens is not None else 512, stack.max_tokens) if stack else (req.max_tokens if req.max_tokens is not None else 512),
-        temperature=stack.temperature if stack else (req.temperature if req.temperature is not None else 0.7),
+        model=model,
+        messages=messages,
+        max_tokens=max(max_tokens if max_tokens is not None else 512, stack.max_tokens) if stack else (max_tokens if max_tokens is not None else 512),
+        temperature=stack.temperature if stack else (temperature if temperature is not None else 0.7),
         seed=stack.seed if stack else None,
-        project=req.project,
+        project=project,
     )
-
-    # Registry-gated verifier selection (§12.5): only registered+eligible models
-    # use the Standard-tier verifier; all others fall back to ContentVerifier.
-    if model_registry.is_eligible(task.model):
+    # Registry-gated verifier selection: only registered+eligible models use
+    # the Standard-tier verifier; all others fall back to ContentVerifier.
+    if model_registry.is_eligible(model):
         effective_verifier: Verifier = verifier
     else:
         if isinstance(verifier, RedundantExecutionVerifier):
             log.info(
-                f"Model '{task.model}' has no registered stack — "
+                f"Model '{model}' has no registered stack — "
                 "falling back to ContentVerifier. "
                 "Register via POST /admin/model-registry to enable Standard-tier verification."
             )
         effective_verifier = ContentVerifier()
+    return task, effective_verifier
 
-    log.info(f"Request recv  id={task.task_id}  model={req.model}  nodes_online={len(nodes)}")
 
+async def _execute_verified_task(
+    task: Task, effective_verifier: Verifier
+) -> tuple[TaskResult, NodeConnection]:
+    """Run one task through the full pipeline: dispatch → well-formed gate →
+    sampled redundant verification → committee escalation on mismatch →
+    reward accrual. Returns (result, node) on acceptance; raises HTTPException
+    (503/504/500/502) otherwise. Every sub-task of a batch goes through this
+    same path, so verification sampling and per-sub-task accrual apply
+    uniformly (ECONOMICS.md §3 Stage 1)."""
     primary, primary_node, status = await _dispatch_and_wait(task)
     if status == "no_node":
         stats["failed"] += 1
         raise HTTPException(
             status_code=503,
-            detail=f"No nodes available for model '{req.model}'. Try again shortly or connect a node.",
+            detail=f"No nodes available for model '{task.model}'. Try again shortly or connect a node.",
         )
     if status == "timeout":
         stats["failed"] += 1
@@ -722,6 +759,21 @@ async def chat_completions(req: ChatRequest, _auth=Depends(_check_api_key)):
             )
         )
 
+    return primary, primary_node
+
+
+# ── HTTP: OpenAI-compatible inference endpoint ────────────────────────────────
+
+@app.post("/v1/chat/completions", response_model=ChatResponse)
+async def chat_completions(req: ChatRequest, _auth=Depends(_check_api_key)):
+    stats["requests"] += 1
+    task, effective_verifier = _make_task(
+        req.model, req.messages, req.max_tokens, req.temperature, req.project
+    )
+    log.info(f"Request recv  id={task.task_id}  model={req.model}  nodes_online={len(nodes)}")
+
+    primary, primary_node = await _execute_verified_task(task, effective_verifier)
+
     prompt_tokens = sum(len(m.content.split()) for m in req.messages)
     completion_tokens = len(primary.content.split())
 
@@ -741,6 +793,68 @@ async def chat_completions(req: ChatRequest, _auth=Depends(_check_api_key)):
     )
 
 
+# ── HTTP: Batch fan-out (VISION.md Stage 1 — job parallelism) ────────────────
+
+@app.post("/v1/batch", response_model=BatchResponse)
+async def batch_completions(req: BatchRequest, _auth=Depends(_check_api_key)):
+    """
+    Fan one job's independent sub-tasks out across the network in parallel —
+    the first rung of the VISION.md staircase: many nodes contributing to one
+    job, results aggregated by the coordinator.
+
+    Each prompt becomes one sub-task running through the SAME verified
+    pipeline as /v1/chat/completions (registered-stack params, sampled
+    redundant verification, committee escalation, per-sub-task accrual).
+    Failures are per-item: one bad sub-task doesn't fail the job.
+    """
+    if not req.prompts:
+        raise HTTPException(status_code=422, detail="prompts must be a non-empty list.")
+    if not nodes:
+        stats["failed"] += len(req.prompts)
+        stats["requests"] += len(req.prompts)
+        raise HTTPException(
+            status_code=503,
+            detail=f"No nodes available for model '{req.model}'. Try again shortly or connect a node.",
+        )
+
+    # Bound concurrency to the network's actual width (snapshot at submit) so
+    # excess sub-tasks queue here instead of burning the 30s dispatch deadline.
+    cap = req.max_parallel if req.max_parallel and req.max_parallel > 0 else len(nodes)
+    sem = asyncio.Semaphore(min(cap, 64))
+
+    log.info(f"Batch recv   sub_tasks={len(req.prompts)}  model={req.model}  parallel={min(cap, 64)}  nodes_online={len(nodes)}")
+
+    async def _run_one(index: int, prompt: str) -> BatchItem:
+        async with sem:
+            stats["requests"] += 1
+            task, effective_verifier = _make_task(
+                req.model,
+                [Message(role=Role.user, content=prompt)],
+                req.max_tokens, req.temperature, req.project,
+            )
+            try:
+                result, node = await _execute_verified_task(task, effective_verifier)
+                return BatchItem(
+                    index=index, status="ok", content=result.content,
+                    node_id=node.info.node_id, tokens=result.tokens_used,
+                )
+            except HTTPException as e:
+                return BatchItem(index=index, status="error", error=str(e.detail))
+
+    items = list(await asyncio.gather(
+        *(_run_one(i, p) for i, p in enumerate(req.prompts))
+    ))
+    completed = sum(1 for it in items if it.status == "ok")
+    log.info(f"Batch done   ok={completed}  failed={len(items) - completed}")
+
+    return BatchResponse(
+        model=req.model,
+        items=items,
+        completed=completed,
+        failed=len(items) - completed,
+    )
+
+
 # ── HTTP: Network status dashboard ───────────────────────────────────────────
 
 @app.get("/status")
@@ -757,7 +871,7 @@ def network_status():
                 "status": n.status.value,
                 "tasks_completed": n.tasks_completed,
                 "balance": ledger.balance(n.info.node_id),
-                "score": score_node(n, n.info.models[0]) if n.status == NodeStatus.idle else "busy",
+                "score": (score_node(n, n.info.models[0]) if n.info.models else 0) if n.status == NodeStatus.idle else "busy",
                 "last_seen_ago_s": round(now - n.last_seen, 1),
                 "last_task_ago_s": round(now - n.last_task_time, 1) if n.last_task_time else None,
             }
