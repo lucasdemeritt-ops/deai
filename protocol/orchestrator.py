@@ -303,27 +303,51 @@ async def node_endpoint(ws: WebSocket):
 
             elif msg.type == "task_complete":
                 result = TaskResult(**msg.payload)
-
                 node = nodes[node_id]
+
+                # Only accept a completion for the task this node was actually
+                # assigned. Anything else is either a late result for a task
+                # that already timed out (drop it — storing would leak an
+                # orphan in `results` forever) or an attempt to complete a
+                # task assigned to a different node (never wake another
+                # task's waiter on an unassigned node's say-so).
+                if result.task_id != node.current_task_id:
+                    if result.task_id in pending_events:
+                        log.warning(f"Rejected completion for unassigned task  id={result.task_id}  from={node_id}")
+                    else:
+                        log.info(f"Late result dropped  id={result.task_id}  node={node_id}")
+                    continue
+
                 node.status = NodeStatus.idle
                 node.tasks_completed += 1
                 node.current_task_id = None
-                results[result.task_id] = result
 
                 log.info(f"Result in    id={result.task_id}  node={node_id}  tokens={result.tokens_used}")
 
                 # Verification, ledger, and on-chain settlement happen in the
                 # HTTP path — it owns the task context and can re-dispatch for
                 # a redundant check before any reward is finalized. Here we
-                # just hand the raw result back to the waiting request.
-                if result.task_id in pending_events:
-                    pending_events[result.task_id].set()
+                # just hand the raw result back to the waiting request. Store
+                # only when a waiter exists, so `results` never accumulates
+                # entries nobody will pop.
+                event = pending_events.get(result.task_id)
+                if event is not None:
+                    results[result.task_id] = result
+                    event.set()
+                else:
+                    log.info(f"Result after timeout dropped  id={result.task_id}  node={node_id}")
 
             elif msg.type == "task_failed":
                 task_id = msg.payload.get("task_id")
                 node = nodes[node_id]
+                if task_id != node.current_task_id:
+                    log.info(f"Stale failure ignored  id={task_id}  node={node_id}")
+                    continue
                 node.status = NodeStatus.idle
-                stats["failed"] += 1
+                node.current_task_id = None
+                # No stats increment here: the waiting HTTP request observes
+                # the missing result and counts the failure once — a WS-side
+                # increment double-counted every failed task.
                 log.warning(f"Task failed  id={task_id}  node={node_id}")
                 if task_id and task_id in pending_events:
                     pending_events[task_id].set()
@@ -757,7 +781,7 @@ def network_status():
                 "status": n.status.value,
                 "tasks_completed": n.tasks_completed,
                 "balance": ledger.balance(n.info.node_id),
-                "score": score_node(n, n.info.models[0]) if n.status == NodeStatus.idle else "busy",
+                "score": (score_node(n, n.info.models[0]) if n.info.models else 0) if n.status == NodeStatus.idle else "busy",
                 "last_seen_ago_s": round(now - n.last_seen, 1),
                 "last_task_ago_s": round(now - n.last_task_time, 1) if n.last_task_time else None,
             }

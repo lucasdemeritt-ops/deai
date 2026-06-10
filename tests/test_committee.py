@@ -63,21 +63,47 @@ def test_unanimous_checker_upheld():
 
 # ── ambiguous members (match neither side) — §13.4 note ──────────────────────
 
-def test_ambiguous_member_counts_as_checker_vote_and_is_flagged():
-    # Committee: one agrees with primary, one matches neither (ambiguous), one
-    # agrees with checker. By binary rule, checker votes = 2, primary = 1 →
-    # checker upheld. The ambiguous one is flagged separately.
+def test_ambiguous_member_counts_toward_neither_side():
+    # One agrees with primary, one matches neither (ambiguous), one agrees
+    # with checker → 1 vs 1 with quorum 2: no side has a quorum of
+    # AFFIRMATIVE votes → UNRESOLVABLE, nobody slashed.
     out = tally_votes(PRIMARY, CHECKER, [PRIMARY, GARBAGE, CHECKER], cmp, T)
-    assert out.verdict is Verdict.CHECKER_UPHELD
-    assert out.primary_votes == 1 and out.checker_votes == 2
+    assert out.verdict is Verdict.UNRESOLVABLE
+    assert out.primary_votes == 1 and out.checker_votes == 1
     assert out.ambiguous_indexes == [1]
+    assert out.dishonest_role is None
 
 
-def test_all_committee_members_ambiguous():
-    # All three match neither — checker votes = 3, all flagged.
+def test_all_committee_members_ambiguous_is_unresolvable():
+    # Regression for the degraded-comparator scenario: if the comparator
+    # breaks (e.g. embedding endpoint outage falls back to sequence-ratio),
+    # honest paraphrases match NEITHER side. That must never read as
+    # "checker upheld → slash the primary" — disagreement with the primary
+    # is not evidence for the checker.
     out = tally_votes(PRIMARY, CHECKER, [GARBAGE, GARBAGE, GARBAGE], cmp, T)
-    assert out.verdict is Verdict.CHECKER_UPHELD
+    assert out.verdict is Verdict.UNRESOLVABLE
+    assert out.primary_votes == 0 and out.checker_votes == 0
     assert out.ambiguous_indexes == [0, 1, 2]
+    assert out.dishonest_role is None
+
+
+def test_degraded_comparator_cannot_slash_anyone():
+    # Same scenario with a realistic "everything scores low" comparator.
+    def degraded(a, b):
+        return 0.30
+    out = tally_votes("honest primary", "honest checker",
+                      ["honest 1", "honest 2", "honest 3"], degraded, 0.85)
+    assert out.verdict is Verdict.UNRESOLVABLE
+    assert out.dishonest_role is None
+
+
+def test_checker_upheld_requires_affirmative_checker_agreement():
+    # Two members actively agree with the checker → quorum met → primary
+    # is genuinely outvoted. This is the legitimate slash path.
+    out = tally_votes(PRIMARY, CHECKER, [CHECKER, CHECKER, GARBAGE], cmp, T)
+    assert out.verdict is Verdict.CHECKER_UPHELD
+    assert out.checker_votes == 2
+    assert out.ambiguous_indexes == [2]
 
 
 # ── tie / unresolvable ───────────────────────────────────────────────────────

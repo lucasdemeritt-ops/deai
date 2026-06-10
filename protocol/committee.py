@@ -7,14 +7,19 @@ this module owns *what the verdict is* given primary, checker, and N
 committee responses.
 
 Tally rule (§13.4):
-  - Each committee response is a *primary vote* if it agrees with primary
-    (similarity >= threshold), otherwise a *checker vote*.
-  - Majority wins (simple majority, ``⌊N/2⌋ + 1``). No tie possible with odd N.
-  - A committee response that matches *neither* primary nor checker beyond
-    threshold is recorded as **ambiguous** — flagged for elevated ``p`` on
-    that node's future tasks, but not slashed from this single event.
-  - On no majority (only possible with even N or a degenerate input), the
-    verdict is UNRESOLVABLE: no reward, no slash.
+  - A committee response is a *primary vote* if it agrees with the primary
+    (similarity >= threshold), else a *checker vote* if it agrees with the
+    checker, else **ambiguous** — it counts toward *neither* side.
+  - A side wins only with a quorum (``⌊N/2⌋ + 1``) of affirmative votes.
+    Disagreement with the primary is NOT evidence for the checker: slashing
+    requires the committee to actively corroborate the accusing side. If
+    ambiguity (non-determinism, a degraded comparator, an outage) erodes
+    either side below quorum, the verdict is UNRESOLVABLE — no pay, no slash.
+    This keeps an infrastructure failure from ever slashing an honest node.
+  - A response that clears the threshold against *both* sides counts as a
+    primary vote (benefit of the doubt goes to the accused).
+  - Ambiguous members are flagged for elevated ``p`` on their future tasks,
+    but never slashed from a single event.
 """
 
 from __future__ import annotations
@@ -80,13 +85,12 @@ def tally_votes(
     checker_votes = 0
     ambiguous: list[int] = []
     for i, c in enumerate(committee_contents):
-        agrees_primary = comparator(c, primary_content) >= threshold
-        if agrees_primary:
-            primary_votes += 1
-            continue
-        checker_votes += 1
-        if comparator(c, checker_content) < threshold:
-            ambiguous.append(i)  # matches neither side — suspicious
+        if comparator(c, primary_content) >= threshold:
+            primary_votes += 1          # agree-with-both also lands here:
+        elif comparator(c, checker_content) >= threshold:  # doubt favours accused
+            checker_votes += 1
+        else:
+            ambiguous.append(i)  # matches neither side — counts toward no one
 
     q = quorum(n)
     if primary_votes >= q and primary_votes > checker_votes:
