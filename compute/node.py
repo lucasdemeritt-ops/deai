@@ -77,6 +77,11 @@ async def ollama_resolve_model(requested: str, available: list[str]) -> str:
         chat_models = [m for m in available if "embed" not in m.lower()]
         return chat_models[0] if chat_models else (available[0] if available else "any")
 
+    # No model list (a non-Ollama backend that serves the loaded model whatever
+    # name is sent) — trust the requested name as-is.
+    if not available:
+        return requested
+
     # Exact match first
     if requested in available:
         return requested
@@ -293,9 +298,19 @@ if __name__ == "__main__":
         if args.ollama or args.auto:
             available_models = await ollama_list_models(ollama_url)
             if not available_models:
-                log.error("No Ollama models found. Is Ollama running? Try: ollama serve")
-                sys.exit(1)
-            log.info(f"Ollama models found: {available_models}")
+                if args.models:
+                    # Any OpenAI-compatible backend (llama.cpp llama-server, vLLM,
+                    # LM Studio) serves /v1/chat/completions but not Ollama's
+                    # /api/tags. If the operator named the models, trust that and
+                    # skip auto-detection instead of refusing to start.
+                    log.warning("Backend model list unavailable (/api/tags); "
+                                "using --models as given.")
+                else:
+                    log.error("No models found. Is the backend running? "
+                              "For Ollama: ollama serve. Otherwise pass --models.")
+                    sys.exit(1)
+            else:
+                log.info(f"Backend models found: {available_models}")
 
         if args.models:
             models = [m.strip() for m in args.models.split(",") if m.strip()]
