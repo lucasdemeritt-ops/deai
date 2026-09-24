@@ -133,6 +133,7 @@ The current-state notes above are deliberately honest about what is *not* yet bu
 
 - **[docs/VISION.md](docs/VISION.md)** — the actual goal: many nodes *contribute to* an inference, not one node per task. The honest staircase to get there (single-node → job-parallel swarms → model-sharded inference → distributed training) and why each step is independently testable.
 - **[docs/VERIFICATION.md](docs/VERIFICATION.md)** — the keystone decision: verification is *optimistic-first* (redundant execution + economic slashing), *tiered* toward TEE attestation, with zkML as a research track. Real verification comes **before** mainnet, not after. Full Stage 0–1 protocol spec (state machine, parameters, threat model, code⇄spec conformance ledger) in **[docs/VERIFICATION_PROTOCOL.md](docs/VERIFICATION_PROTOCOL.md)**.
+- **[docs/DECENTRALIZATION.md](docs/DECENTRALIZATION.md)** — removing the single orchestrator: every node runs the same software and orchestration becomes a role, not a machine. Requesters route their own tasks, libp2p handles discovery and NAT traversal, and requester-funded receipts replace the trusted reward-root publisher. States plainly which parts are solved, which are assembly, and which (payment) are genuinely hard — plus the IP-privacy tradeoff peer-to-peer forces on SECURITY.md Rules 1 and 6.
 - **[docs/ECONOMICS.md](docs/ECONOMICS.md)** — the token model: DAI is redeemable for real inference at a rate that is *transparently and verifiably determined, never set at anyone's discretion* (the redemption invariant + the immutable self-check). Stable on-ramps absorb volatility; the token is non-transferable and valueless until an explicit graduation checklist is met.
 
 One-line summary of the sequencing: **trustworthy work-measurement is the keystone — honest pay and an honest redemption rate both depend on it — so verification and economic hardening come first, and mainnet is a graduation exam gated behind them, not a milestone to rush.**
@@ -177,7 +178,7 @@ Nothing below ships with real value until this phase is proven. All of it runs o
 - [ ] **Vesting-bond sybil resistance** — no upfront stake; unvested earnings act as a slashable bond. Preserves no-barrier-to-entry.
 - [ ] **Redemption-anchored economics** — DAI redeemable for inference at a transparently determined rate; stablecoin/fiat on-ramps; burn sinks.
 - [ ] **The immutable self-check** — open on-chain rule, tamper-evident inputs, publicly recomputable, rule changes only via a pre-announced timelocked path. (Expected to take more than one iteration — see ECONOMICS.md.)
-- [ ] **Decentralize the orchestrator** — remove the single-trusted-node routing and reward-root (`UPDATER_ROLE`) authority. (The hot token `MINTER_ROLE` is already gone — build-now #4.)
+- [ ] **Decentralize the orchestrator** — remove the single-trusted-node routing and reward-root (`UPDATER_ROLE`) authority. (The hot token `MINTER_ROLE` is already gone — build-now #4.) Design and staircase (D0–D4) in [docs/DECENTRALIZATION.md](docs/DECENTRALIZATION.md); first step is a two-machine py-libp2p spike.
 
 ### Phase 4 — Collaborative Compute & Scale
 
